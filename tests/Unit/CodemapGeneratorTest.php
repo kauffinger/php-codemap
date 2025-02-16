@@ -29,6 +29,6 @@ PHP);
     unlink($tempFile);
 
     expect($result)->toHaveCount(1)
-        ->and($result[array_key_first($result)]['classes'])
+        ->and($result[array_key_first($result)]->classes)
         ->toHaveKey('SimpleClass');
 });

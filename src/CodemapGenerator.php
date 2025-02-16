@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace Kauffinger\Codemap;
 
+use Kauffinger\Codemap\Dto\CodemapClassDto;
+use Kauffinger\Codemap\Dto\CodemapFileDto;
+use Kauffinger\Codemap\Dto\CodemapMethodDto;
+use Kauffinger\Codemap\Dto\CodemapPropertyDto;
 use PhpParser\Error;
 use PhpParser\Node;
 use PhpParser\Node\Stmt\Class_;
@@ -16,16 +20,16 @@ use PhpParser\ParserFactory;
 use PhpParser\PhpVersion;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
+use SplFileInfo;
 
 final class CodemapGenerator
 {
     /**
      * Scans the provided path (directory or single file).
-     * If it's a directory, it scans recursively for PHP files.
-     * If it's a single file, it parses just that file.
+     * If it's a directory, scans recursively for PHP files.
+     * If it's a single file, parses just that file.
      *
-     * @param  string  $path  Directory or file to parse.
-     * @return array Parsed structure of classes, methods, and properties.
+     * @return array<string, CodemapFileDto> A map of fileName => codemap DTO
      */
     public function generate(string $path): array
     {
@@ -46,6 +50,7 @@ final class CodemapGenerator
         $results = [];
         $iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($path));
 
+        /** @var SplFileInfo $file */
         foreach ($iterator as $file) {
             if ($file->isDir()) {
                 continue;
@@ -55,17 +60,19 @@ final class CodemapGenerator
             }
 
             $parsed = $this->processFile($file->getRealPath());
-            $results = array_merge($results, $parsed);
+            // Merge results by file name
+            foreach ($parsed as $fileName => $dto) {
+                $results[$fileName] = $dto;
+            }
         }
 
         return $results;
     }
 
     /**
-     * Processes a single PHP file, returning codemap data.
+     * Processes a single PHP file, returning codemap data in a DTO.
      *
-     * @param  string  $filePath  The file to parse.
-     * @return array The codemap results for this file.
+     * @return array<string, CodemapFileDto> The codemap results for this file
      */
     private function processFile(string $filePath): array
     {
@@ -75,6 +82,9 @@ final class CodemapGenerator
 
         $parser = (new ParserFactory)->createForVersion(PhpVersion::getHostVersion());
         $code = file_get_contents($filePath);
+        if ($code === false) {
+            return [];
+        }
 
         try {
             $ast = $parser->parse($code);
@@ -85,20 +95,16 @@ final class CodemapGenerator
         }
 
         $fileName = basename($filePath);
-        $results = [
-            $fileName => ['classes' => []],
-        ];
 
-        // Create a NodeVisitor to track classes, methods, and properties
         $visitor = new class extends NodeVisitorAbstract
         {
+            /* @phpstan-ignore-next-line */
             public array $classes = [];
 
             private ?string $currentClassName = null;
 
             public function enterNode(Node $node)
             {
-                // Capture class names
                 if ($node instanceof Class_) {
                     $this->currentClassName = $node->namespacedName
                         ? $node->namespacedName->toString()
@@ -108,9 +114,7 @@ final class CodemapGenerator
                         'methods' => [],
                         'properties' => [],
                     ];
-                }
-                // Capture methods
-                elseif ($node instanceof ClassMethod && $this->currentClassName !== null) {
+                } elseif ($node instanceof ClassMethod && $this->currentClassName !== null) {
                     $visibility = $node->isPublic()
                         ? 'public'
                         : ($node->isProtected() ? 'protected' : 'private');
@@ -129,9 +133,7 @@ final class CodemapGenerator
                         'name' => $node->name->toString(),
                         'returnType' => $returnType,
                     ];
-                }
-                // Capture properties
-                elseif ($node instanceof Property && $this->currentClassName !== null) {
+                } elseif ($node instanceof Property && $this->currentClassName !== null) {
                     $visibility = $node->isPublic()
                         ? 'public'
                         : ($node->isProtected() ? 'protected' : 'private');
@@ -143,18 +145,41 @@ final class CodemapGenerator
                         ];
                     }
                 }
+
+                return null;
             }
         };
 
-        // Traverse the AST
         $traverser = new NodeTraverser;
         $traverser->addVisitor(new NameResolver);
         $traverser->addVisitor($visitor);
-        $traverser->traverse($ast);
+        $traverser->traverse((array) $ast);
 
-        // Store the gathered class info for this file
-        $results[$fileName]['classes'] = $visitor->classes;
+        // Convert arrays to typed DTOs
+        $classes = [];
+        foreach ($visitor->classes as $className => $classData) {
+            $methods = [];
+            foreach ($classData['methods'] as $methodData) {
+                $methods[] = new CodemapMethodDto(
+                    $methodData['visibility'],
+                    $methodData['name'],
+                    $methodData['returnType']
+                );
+            }
 
-        return $results;
+            $properties = [];
+            foreach ($classData['properties'] as $propData) {
+                $properties[] = new CodemapPropertyDto(
+                    $propData['visibility'],
+                    $propData['name']
+                );
+            }
+
+            $classes[$className] = new CodemapClassDto($methods, $properties);
+        }
+
+        $dto = new CodemapFileDto($classes);
+
+        return [$fileName => $dto];
     }
 }

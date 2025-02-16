@@ -9,7 +9,7 @@ final class CodemapCommand
     /**
      * Invokes the codemap command.
      *
-     * @param  array  $args  The command-line arguments (if any).
+     * @param  string[]  $args  The command-line arguments (if any).
      * @return int Exit code.
      */
     public function __invoke(array $args): int
@@ -26,6 +26,7 @@ final class CodemapCommand
         $outputFile = __DIR__.'/../codemap.txt';
 
         $generator = new CodemapGenerator;
+        /** @var array<string, Dto\CodemapFileDto> $allResults */
         $allResults = [];
 
         foreach ($pathsToScan as $path) {
@@ -35,13 +36,17 @@ final class CodemapCommand
                 continue;
             }
 
+            // Each $results is array<string, CodemapFileDto>
             $results = $generator->generate($path);
-            foreach ($results as $fileName => $data) {
-                $allResults[$fileName] = $data;
+
+            // Merge them by filename
+            foreach ($results as $fileName => $dto) {
+                $allResults[$fileName] = $dto;
             }
         }
 
         $formatter = new TextCodemapFormatter;
+        // Now $allResults is array<string, CodemapFileDto>
         $output = $formatter->format($allResults);
 
         file_put_contents($outputFile, $output);

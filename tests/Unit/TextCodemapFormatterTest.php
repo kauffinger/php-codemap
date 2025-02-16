@@ -8,20 +8,18 @@ test('TextCodemapFormatter correctly formats class, methods, and public properti
     $formatter = new TextCodemapFormatter;
 
     $testData = [
-        'Example.php' => [
-            'classes' => [
-                'Acme\\Example' => [
-                    'methods' => [
-                        ['visibility' => 'public', 'name' => 'run', 'returnType' => 'void'],
-                        ['visibility' => 'protected', 'name' => 'test', 'returnType' => 'mixed'],
-                    ],
-                    'properties' => [
-                        ['visibility' => 'public', 'name' => 'foo'],
-                        ['visibility' => 'private', 'name' => 'bar'],
-                    ],
+        'Example.php' => new Kauffinger\Codemap\Dto\CodemapFileDto([
+            'Acme\\Example' => new Kauffinger\Codemap\Dto\CodemapClassDto(
+                [
+                    new Kauffinger\Codemap\Dto\CodemapMethodDto('public', 'run', 'void'),
+                    new Kauffinger\Codemap\Dto\CodemapMethodDto('protected', 'test', 'mixed'),
                 ],
-            ],
-        ],
+                [
+                    new Kauffinger\Codemap\Dto\CodemapPropertyDto('public', 'foo'),
+                    new Kauffinger\Codemap\Dto\CodemapPropertyDto('private', 'bar'),
+                ]
+            ),
+        ]),
     ];
 
     $output = $formatter->format($testData);
