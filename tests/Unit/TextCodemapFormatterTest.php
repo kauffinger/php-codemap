@@ -15,8 +15,8 @@ test('TextCodemapFormatter correctly formats class, methods, and public properti
                     new Kauffinger\Codemap\Dto\CodemapMethodDto('protected', 'test', 'mixed'),
                 ],
                 [
-                    new Kauffinger\Codemap\Dto\CodemapPropertyDto('public', 'foo'),
-                    new Kauffinger\Codemap\Dto\CodemapPropertyDto('private', 'bar'),
+                    new Kauffinger\Codemap\Dto\CodemapPropertyDto('public', 'foo', 'string'),
+                    new Kauffinger\Codemap\Dto\CodemapPropertyDto('private', 'bar', 'int'),
                 ]
             ),
         ]),
@@ -28,6 +28,6 @@ test('TextCodemapFormatter correctly formats class, methods, and public properti
         ->toContain('Class: Acme\\Example')
         ->toContain('public function run(): void')
         ->toContain('protected function test(): mixed')
-        ->toContain('public property $foo')
+        ->toContain('public property string $foo')
         ->not->toContain('private property $bar'); // Should not list private props
 });

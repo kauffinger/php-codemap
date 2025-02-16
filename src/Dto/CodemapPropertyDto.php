@@ -8,6 +8,7 @@ final class CodemapPropertyDto
 {
     public function __construct(
         public string $visibility,
-        public string $name
+        public string $name,
+        public string $type
     ) {}
 }

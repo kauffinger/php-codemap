@@ -39,8 +39,9 @@ final class TextCodemapFormatter
                 foreach ($classDto->properties as $property) {
                     if ($property->visibility === 'public') {
                         $output .= sprintf(
-                            "    %s property \$%s\n",
+                            "    %s property %s \$%s\n",
                             $property->visibility,
+                            $property->type,
                             $property->name
                         );
                     }

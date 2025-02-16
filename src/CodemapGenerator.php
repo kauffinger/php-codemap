@@ -138,10 +138,20 @@ final class CodemapGenerator
                         ? 'public'
                         : ($node->isProtected() ? 'protected' : 'private');
 
+                    $propertyType = $node->type;
+                    if ($propertyType instanceof Node\Identifier) {
+                        $propertyType = $propertyType->name;
+                    } elseif ($propertyType instanceof Node\Name) {
+                        $propertyType = $propertyType->toString();
+                    } else {
+                        $propertyType = 'mixed';
+                    }
+
                     foreach ($node->props as $prop) {
                         $this->classes[$this->currentClassName]['properties'][] = [
                             'visibility' => $visibility,
                             'name' => $prop->name->toString(),
+                            'type' => $propertyType,
                         ];
                     }
                 }
@@ -171,7 +181,8 @@ final class CodemapGenerator
             foreach ($classData['properties'] as $propData) {
                 $properties[] = new CodemapPropertyDto(
                     $propData['visibility'],
-                    $propData['name']
+                    $propData['name'],
+                    $propData['type']
                 );
             }
 
