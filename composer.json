@@ -1,0 +1,60 @@
+{
+    "name": "kauffinger/php-codemap",
+    "description": "Generate codemap surface text for PHP code",
+    "keywords": ["php", "codemap", "repoprompt"],
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Konstantin Auffinger",
+            "email": "konstantinauffinger@gmail.com"
+        }
+    ],
+    "bin": [
+        "bin/codemap"
+    ],
+    "require": {
+        "php": "^8.3.0",
+        "nikic/php-parser": "^5.4"
+    },
+    "require-dev": {
+        "laravel/pint": "^1.18.1",
+        "pestphp/pest": "^3.7",
+        "pestphp/pest-plugin-type-coverage": "^3.1",
+        "phpstan/phpstan": "^1.12.7",
+        "rector/rector": "^1.2.8",
+        "symfony/var-dumper": "^7.1.6"
+    },
+    "autoload": {
+        "psr-4": {
+            "Kauffinger\\Codemap\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true,
+    "config": {
+        "sort-packages": true,
+        "preferred-install": "dist",
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
+    },
+    "scripts": {
+        "refacto": "rector",
+        "lint": "pint",
+        "test:refacto": "rector --dry-run",
+        "test:lint": "pint --test",
+        "test:types": "phpstan analyse --ansi",
+        "test:unit": "pest --colors=always --coverage --parallel --min=100",
+        "test": [
+            "@test:refacto",
+            "@test:lint",
+            "@test:types",
+            "@test:unit"
+        ]
+    }
+}
