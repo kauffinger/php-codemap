@@ -1,3 +1,8 @@
+[![Latest Version on Packagist](https://img.shields.io/packagist/v/kauffinger/pyman.svg?style=flat-square)](https://packagist.org/packages/kauffinger/php-codemap)
+[![Linting](https://img.shields.io/github/actions/workflow/status/kauffinger/pyman/formats.yml?branch=main&label=linting&style=flat-square)](https://github.com/kauffinger/pyman/actions/workflows/checks.yml)
+[![Tests](https://img.shields.io/github/actions/workflow/status/kauffinger/pyman/tests.yml?branch=main&label=tests&style=flat-square)](https://github.com/kauffinger/pyman/actions/workflows/tests.yml)
+[![Total Downloads](https://img.shields.io/packagist/dt/kauffinger/pyman.svg?style=flat-square)](https://packagist.org/packages/kauffinger/php-codemap)
+
 # PHP Codemap
 
 PHP Codemap is a Composer package that generates a textual codemap of your PHP code. It scans your PHP files and produces a map that lists classes, methods, and public properties.
