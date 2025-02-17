@@ -7,12 +7,9 @@ namespace Kauffinger\Codemap\Dto;
 final readonly class CodemapFileDto
 {
     /**
-     * @param  array<string, CodemapClassDto>  $classes
+     * @param  array<string, CodemapClassDto>  $classesInFile  Map of FQCN => CodemapClassDto
      */
     public function __construct(
-        /**
-         * Map of fully qualified class names => CodemapClassDto
-         */
-        public array $classes = []
+        public array $classesInFile = []
     ) {}
 }

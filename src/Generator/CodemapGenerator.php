@@ -27,6 +27,39 @@ final class CodemapGenerator
     private ?PhpVersion $phpParserVersion = null;
 
     /**
+     * Renders a complex type (union/intersection) as a string.
+     */
+    public function renderComplexType(Node\ComplexType $node): string
+    {
+        if ($node instanceof Node\UnionType) {
+            return implode('|', array_map(fn (Node $n) => $this->typeNodeToString($n), $node->types));
+        }
+        if ($node instanceof Node\IntersectionType) {
+            return implode('&', array_map(fn (Node $n) => $this->typeNodeToString($n), $node->types));
+        }
+        if ($node instanceof Node\NullableType) {
+            return '?'.$this->typeNodeToString($node->type);
+        }
+
+        return 'mixed';
+    }
+
+    private function typeNodeToString(Node $n): string
+    {
+        if ($n instanceof Node\Identifier) {
+            return $n->name;
+        }
+        if ($n instanceof Node\Name) {
+            return $n->toString();
+        }
+        if ($n instanceof Node\ComplexType) {
+            return $this->renderComplexType($n);
+        }
+
+        return 'mixed';
+    }
+
+    /**
      * Optionally set the PHP version used by PhpParser.
      */
     public function setPhpParserVersion(?PhpVersion $version): void
@@ -41,41 +74,42 @@ final class CodemapGenerator
      *
      * @return array<string, CodemapFileDto> A map of fileName => codemap DTO
      */
-    public function generate(string $path): array
+    public function generate(string $pathToScan): array
     {
-        if (! file_exists($path)) {
+        if (! file_exists($pathToScan)) {
             return [];
         }
 
-        // If path is a file, just parse that single file.
-        if (is_file($path)) {
-            return $this->processFile($path);
+        // If path is a file, parse that single file
+        if (is_file($pathToScan)) {
+            return $this->processSingleFile($pathToScan);
         }
 
-        // Otherwise, path is a directory; scan recursively.
-        if (! is_dir($path)) {
+        // Otherwise, if path is a directory, scan recursively
+        if (! is_dir($pathToScan)) {
             return [];
         }
 
-        $results = [];
-        $iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($path));
+        $scanResults = [];
+        $directoryIterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($pathToScan));
 
         /** @var SplFileInfo $file */
-        foreach ($iterator as $file) {
+        foreach ($directoryIterator as $file) {
             if ($file->isDir()) {
                 continue;
             }
+
             if ($file->getExtension() !== 'php') {
                 continue;
             }
 
-            $parsed = $this->processFile($file->getRealPath());
-            foreach ($parsed as $fileName => $dto) {
-                $results[$fileName] = $dto;
+            $parsedFileResults = $this->processSingleFile($file->getRealPath());
+            foreach ($parsedFileResults as $fileName => $codemapFileDto) {
+                $scanResults[$fileName] = $codemapFileDto;
             }
         }
 
-        return $results;
+        return $scanResults;
     }
 
     /**
@@ -83,7 +117,7 @@ final class CodemapGenerator
      *
      * @return array<string, CodemapFileDto> The codemap results for this file
      */
-    private function processFile(string $filePath): array
+    private function processSingleFile(string $filePath): array
     {
         if (! file_exists($filePath) || pathinfo($filePath, PATHINFO_EXTENSION) !== 'php') {
             return [];
@@ -93,115 +127,154 @@ final class CodemapGenerator
             $this->phpParserVersion ?? PhpVersion::getHostVersion()
         );
 
-        $code = file_get_contents($filePath);
-        if ($code === false) {
+        $fileContents = file_get_contents($filePath);
+        if ($fileContents === false) {
             return [];
         }
 
         try {
-            $ast = $parser->parse($code);
-        } catch (Error $e) {
-            echo 'Parse Error: '.$e->getMessage().PHP_EOL;
+            $abstractSyntaxTree = $parser->parse($fileContents);
+        } catch (Error $parseError) {
+            echo 'Parse Error: '.$parseError->getMessage().PHP_EOL;
 
             return [];
         }
 
         $fileName = basename($filePath);
 
-        $visitor = new class extends NodeVisitorAbstract
+        $classCollectionVisitor = new class($this) extends NodeVisitorAbstract
         {
-            public array $classes = [];
+            public array $collectedClasses = [];
 
             private ?string $currentClassName = null;
 
-            public function enterNode(Node $node)
+            public function __construct(
+                private readonly CodemapGenerator $generator
+            ) {}
+
+            public function enterNode(Node\ComplexType|Node $node): void
             {
                 if ($node instanceof Class_) {
                     $this->currentClassName = $node->namespacedName
                         ? $node->namespacedName->toString()
                         : (string) $node->name;
 
-                    $this->classes[$this->currentClassName] = [
-                        'methods' => [],
-                        'properties' => [],
+                    $this->collectedClasses[$this->currentClassName] = [
+                        'classMethods' => [],
+                        'classProperties' => [],
                     ];
                 } elseif ($node instanceof ClassMethod && $this->currentClassName !== null) {
-                    $visibility = $node->isPublic()
+                    $methodVisibility = $node->isPublic()
                         ? 'public'
                         : ($node->isProtected() ? 'protected' : 'private');
 
-                    $returnType = $node->getReturnType();
-                    if ($returnType instanceof Node\Identifier) {
-                        $returnType = $returnType->name;
-                    } elseif ($returnType instanceof Node\Name) {
-                        $returnType = $returnType->toString();
+                    $returnTypeNode = $node->getReturnType();
+                    if ($returnTypeNode instanceof Node\Identifier) {
+                        $determinedReturnType = $returnTypeNode->name;
+                    } elseif ($returnTypeNode instanceof Node\Name) {
+                        $determinedReturnType = $returnTypeNode->toString();
+                    } elseif ($returnTypeNode instanceof Node\ComplexType) {
+                        // e.g. Union or Intersection types
+                        $determinedReturnType = $this->generator->renderComplexType($returnTypeNode);
                     } else {
-                        $returnType = 'mixed';
+                        $determinedReturnType = 'mixed';
                     }
 
-                    $this->classes[$this->currentClassName]['methods'][] = [
-                        'visibility' => $visibility,
-                        'name' => $node->name->toString(),
-                        'returnType' => $returnType,
+                    // Collect parameters
+                    $methodParameters = [];
+                    foreach ($node->getParams() as $param) {
+                        $paramType = 'mixed';
+                        if ($param->type instanceof Node\Identifier) {
+                            $paramType = $param->type->name;
+                        } elseif ($param->type instanceof Node\Name) {
+                            $paramType = $param->type->toString();
+                        } elseif ($param->type instanceof Node\ComplexType) {
+                            $paramType = $this->generator->renderComplexType($param->type);
+                        }
+
+                        $paramNameNode = $param->var->name;
+                        if (is_string($paramNameNode)) {
+                            $paramName = $paramNameNode;
+                        } elseif ($paramNameNode instanceof Node\Identifier) {
+                            $paramName = $paramNameNode->name;
+                        } else {
+                            $paramName = 'unknown';
+                        }
+
+                        $methodParameters[] = [
+                            'parameterName' => $paramName,
+                            'parameterType' => $paramType,
+                        ];
+                    }
+
+                    $this->collectedClasses[$this->currentClassName]['classMethods'][] = [
+                        'methodVisibility' => $methodVisibility,
+                        'methodName' => $node->name->toString(),
+                        'methodReturnType' => $determinedReturnType,
+                        'methodParameters' => $methodParameters,
                     ];
                 } elseif ($node instanceof Property && $this->currentClassName !== null) {
-                    $visibility = $node->isPublic()
+                    $propertyVisibility = $node->isPublic()
                         ? 'public'
                         : ($node->isProtected() ? 'protected' : 'private');
 
-                    $propertyType = $node->type;
-                    if ($propertyType instanceof Node\Identifier) {
-                        $propertyType = $propertyType->name;
-                    } elseif ($propertyType instanceof Node\Name) {
-                        $propertyType = $propertyType->toString();
+                    $propertyTypeNode = $node->type;
+                    if ($propertyTypeNode instanceof Node\Identifier) {
+                        $determinedPropertyType = $propertyTypeNode->name;
+                    } elseif ($propertyTypeNode instanceof Node\Name) {
+                        $determinedPropertyType = $propertyTypeNode->toString();
+                    } elseif ($propertyTypeNode instanceof Node\ComplexType) {
+                        $determinedPropertyType = $this->generator->renderComplexType($propertyTypeNode);
                     } else {
-                        $propertyType = 'mixed';
+                        $determinedPropertyType = 'mixed';
                     }
 
-                    foreach ($node->props as $prop) {
-                        $this->classes[$this->currentClassName]['properties'][] = [
-                            'visibility' => $visibility,
-                            'name' => $prop->name->toString(),
-                            'type' => $propertyType,
+                    foreach ($node->props as $propertyDefinition) {
+                        $this->collectedClasses[$this->currentClassName]['classProperties'][] = [
+                            'propertyVisibility' => $propertyVisibility,
+                            'propertyName' => $propertyDefinition->name->toString(),
+                            'propertyType' => $determinedPropertyType,
                         ];
                     }
                 }
-
-                return null;
             }
         };
 
-        $traverser = new NodeTraverser;
-        $traverser->addVisitor(new NameResolver);
-        $traverser->addVisitor($visitor);
-        $traverser->traverse((array) $ast);
+        $nodeTraverser = new NodeTraverser;
+        $nodeTraverser->addVisitor(new NameResolver);
+        $nodeTraverser->addVisitor($classCollectionVisitor);
+        $nodeTraverser->traverse((array) $abstractSyntaxTree);
 
         // Convert arrays to typed DTOs
-        $classes = [];
-        foreach ($visitor->classes as $className => $classData) {
-            $methods = [];
-            foreach ($classData['methods'] as $methodData) {
-                $methods[] = new CodemapMethodDto(
-                    $methodData['visibility'],
-                    $methodData['name'],
-                    $methodData['returnType']
+        $discoveredClasses = [];
+        foreach ($classCollectionVisitor->collectedClasses as $className => $classData) {
+            $classMethods = [];
+            foreach ($classData['classMethods'] as $methodData) {
+                $classMethods[] = new CodemapMethodDto(
+                    $methodData['methodVisibility'],
+                    $methodData['methodName'],
+                    $methodData['methodReturnType'],
+                    $methodData['methodParameters'] ?? []
                 );
             }
 
-            $properties = [];
-            foreach ($classData['properties'] as $propData) {
-                $properties[] = new CodemapPropertyDto(
-                    $propData['visibility'],
-                    $propData['name'],
-                    $propData['type']
+            $classProperties = [];
+            foreach ($classData['classProperties'] as $propertyData) {
+                $classProperties[] = new CodemapPropertyDto(
+                    $propertyData['propertyVisibility'],
+                    $propertyData['propertyName'],
+                    $propertyData['propertyType']
                 );
             }
 
-            $classes[$className] = new CodemapClassDto($methods, $properties);
+            $discoveredClasses[$className] = new CodemapClassDto(
+                $classMethods,
+                $classProperties
+            );
         }
 
-        $dto = new CodemapFileDto($classes);
+        $codemapFileDto = new CodemapFileDto($discoveredClasses);
 
-        return [$fileName => $dto];
+        return [$fileName => $codemapFileDto];
     }
 }

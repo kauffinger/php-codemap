@@ -11,9 +11,9 @@ final class CodemapConfig
     /**
      * @var string[]
      */
-    private array $paths = [];
+    private array $configuredScanPaths = [];
 
-    private ?PhpVersion $phpVersion = null;
+    private ?PhpVersion $configuredPhpVersion = null;
 
     private function __construct()
     {
@@ -31,11 +31,11 @@ final class CodemapConfig
     /**
      * Sets the paths to scan.
      *
-     * @param  string[]  $paths
+     * @param  string[]  $scanPaths
      */
-    public function withPaths(array $paths): self
+    public function withScanPaths(array $scanPaths): self
     {
-        $this->paths = $paths;
+        $this->configuredScanPaths = $scanPaths;
 
         return $this;
     }
@@ -45,26 +45,26 @@ final class CodemapConfig
      */
     public function withPhpVersion(PhpVersion $phpVersion): self
     {
-        $this->phpVersion = $phpVersion;
+        $this->configuredPhpVersion = $phpVersion;
 
         return $this;
     }
 
     /**
-     * Returns the configured paths.
+     * Returns the configured scan paths.
      *
      * @return string[]
      */
-    public function getPaths(): array
+    public function getScanPaths(): array
     {
-        return $this->paths;
+        return $this->configuredScanPaths;
     }
 
     /**
-     * Returns the configured PHP version or null if none.
+     * Returns the configured PHP version or null if none was set.
      */
-    public function getPhpVersion(): ?PhpVersion
+    public function getConfiguredPhpVersion(): ?PhpVersion
     {
-        return $this->phpVersion;
+        return $this->configuredPhpVersion;
     }
 }

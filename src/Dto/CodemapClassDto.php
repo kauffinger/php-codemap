@@ -7,11 +7,11 @@ namespace Kauffinger\Codemap\Dto;
 final readonly class CodemapClassDto
 {
     /**
-     * @param  CodemapMethodDto[]  $methods
-     * @param  CodemapPropertyDto[]  $properties
+     * @param  CodemapMethodDto[]  $classMethods
+     * @param  CodemapPropertyDto[]  $classProperties
      */
     public function __construct(
-        public array $methods = [],
-        public array $properties = []
+        public array $classMethods = [],
+        public array $classProperties = []
     ) {}
 }

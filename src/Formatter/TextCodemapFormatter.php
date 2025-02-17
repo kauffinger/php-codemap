@@ -9,42 +9,51 @@ use Kauffinger\Codemap\Dto\CodemapFileDto;
 final class TextCodemapFormatter
 {
     /**
-     * @param  array<string, CodemapFileDto>  $results
+     * @param  array<string, CodemapFileDto>  $codemapData
      */
-    public function format(array $results): string
+    public function format(array $codemapData): string
     {
-        $output = '';
-        foreach ($results as $fileName => $fileDto) {
-            $output .= "File: {$fileName}\n";
+        $formattedOutput = '';
+        foreach ($codemapData as $fileName => $fileData) {
+            $formattedOutput .= "File: {$fileName}\n";
 
-            foreach ($fileDto->classes as $className => $classDto) {
-                $output .= "  Class: {$className}\n";
+            foreach ($fileData->classesInFile as $className => $classInformation) {
+                $formattedOutput .= "  Class: {$className}\n";
 
-                foreach ($classDto->methods as $method) {
-                    $output .= sprintf(
-                        "    %s function %s(): %s\n",
-                        $method->visibility,
-                        $method->name,
-                        $method->returnType
+                foreach ($classInformation->classMethods as $methodInformation) {
+                    $paramList = '';
+                    foreach ($methodInformation->methodParameters as $param) {
+                        if ($paramList !== '') {
+                            $paramList .= ', ';
+                        }
+                        $paramList .= $param['parameterType'].' $'.$param['parameterName'];
+                    }
+
+                    $formattedOutput .= sprintf(
+                        "    %s function %s(%s): %s\n",
+                        $methodInformation->methodVisibility,
+                        $methodInformation->methodName,
+                        $paramList,
+                        $methodInformation->methodReturnType
                     );
                 }
 
                 // Only show public properties
-                foreach ($classDto->properties as $property) {
-                    if ($property->visibility === 'public') {
-                        $output .= sprintf(
+                foreach ($classInformation->classProperties as $propertyInformation) {
+                    if ($propertyInformation->propertyVisibility === 'public') {
+                        $formattedOutput .= sprintf(
                             "    %s property %s \$%s\n",
-                            $property->visibility,
-                            $property->type,
-                            $property->name
+                            $propertyInformation->propertyVisibility,
+                            $propertyInformation->propertyType,
+                            $propertyInformation->propertyName
                         );
                     }
                 }
             }
 
-            $output .= "\n";
+            $formattedOutput .= "\n";
         }
 
-        return $output;
+        return $formattedOutput;
     }
 }
