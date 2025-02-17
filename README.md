@@ -1,7 +1,7 @@
-[![Latest Version on Packagist](https://img.shields.io/packagist/v/kauffinger/pyman.svg?style=flat-square)](https://packagist.org/packages/kauffinger/php-codemap)
-[![Linting](https://img.shields.io/github/actions/workflow/status/kauffinger/pyman/formats.yml?branch=main&label=linting&style=flat-square)](https://github.com/kauffinger/pyman/actions/workflows/checks.yml)
-[![Tests](https://img.shields.io/github/actions/workflow/status/kauffinger/pyman/tests.yml?branch=main&label=tests&style=flat-square)](https://github.com/kauffinger/pyman/actions/workflows/tests.yml)
-[![Total Downloads](https://img.shields.io/packagist/dt/kauffinger/pyman.svg?style=flat-square)](https://packagist.org/packages/kauffinger/php-codemap)
+[![Latest Version on Packagist](https://img.shields.io/packagist/v/kauffinger/php-codemap.svg?style=flat-square)](https://packagist.org/packages/kauffinger/php-codemap)
+[![Linting](https://img.shields.io/github/actions/workflow/status/kauffinger/php-codemap/formats.yml?branch=main&label=linting&style=flat-square)](https://github.com/kauffinger/php-codemap/actions/workflows/checks.yml)
+[![Tests](https://img.shields.io/github/actions/workflow/status/kauffinger/php-codemap/tests.yml?branch=main&label=tests&style=flat-square)](https://github.com/kauffinger/php-codemap/actions/workflows/tests.yml)
+[![Total Downloads](https://img.shields.io/packagist/dt/kauffinger/php-codemap.svg?style=flat-square)](https://packagist.org/packages/kauffinger/php-codemap)
 
 # PHP Codemap
 
