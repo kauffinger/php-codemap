@@ -1,0 +1,44 @@
+File: CodemapClassDto.php
+  Class: Kauffinger\Codemap\Dto\CodemapClassDto
+    public function __construct(): mixed
+
+File: CodemapPropertyDto.php
+  Class: Kauffinger\Codemap\Dto\CodemapPropertyDto
+    public function __construct(): mixed
+
+File: CodemapMethodDto.php
+  Class: Kauffinger\Codemap\Dto\CodemapMethodDto
+    public function __construct(): mixed
+
+File: CodemapFileDto.php
+  Class: Kauffinger\Codemap\Dto\CodemapFileDto
+    public function __construct(): mixed
+
+File: TextCodemapFormatter.php
+  Class: Kauffinger\Codemap\TextCodemapFormatter
+    public function format(): string
+
+File: CodemapConfig.php
+  Class: Kauffinger\Codemap\CodemapConfig
+    private function __construct(): mixed
+    public function configure(): self
+    public function withPaths(): self
+    public function withPhpVersion(): self
+    public function getPaths(): array
+    public function getPhpVersion(): mixed
+
+File: CodemapCommand.php
+  Class: Kauffinger\Codemap\CodemapCommand
+    public function __invoke(): int
+
+File: PhpVersion.php
+
+File: CodemapGenerator.php
+  Class: Kauffinger\Codemap\CodemapGenerator
+    public function setPhpParserVersion(): void
+    public function generate(): array
+    private function processFile(): array
+  Class: 
+    public function enterNode(): mixed
+    public property array $classes
+

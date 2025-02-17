@@ -24,6 +24,16 @@ use SplFileInfo;
 
 final class CodemapGenerator
 {
+    private ?PhpVersion $phpParserVersion = null;
+
+    /**
+     * Optionally set the PHP version used by PhpParser.
+     */
+    public function setPhpParserVersion(?PhpVersion $version): void
+    {
+        $this->phpParserVersion = $version;
+    }
+
     /**
      * Scans the provided path (directory or single file).
      * If it's a directory, scans recursively for PHP files.
@@ -80,7 +90,10 @@ final class CodemapGenerator
             return [];
         }
 
-        $parser = (new ParserFactory)->createForVersion(PhpVersion::getHostVersion());
+        $parser = (new ParserFactory)->createForVersion(
+            $this->phpParserVersion ?? PhpVersion::getHostVersion()
+        );
+
         $code = file_get_contents($filePath);
         if ($code === false) {
             return [];
