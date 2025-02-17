@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use Kauffinger\Codemap\CodemapCommand;
+use Kauffinger\Codemap\Console\CodemapCommand;
 
 test('CodemapCommand runs without error and generates codemap.txt', function (): void {
     // Use a temp directory for output

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Kauffinger\Codemap\Dto;
 
-final class CodemapMethodDto
+final readonly class CodemapMethodDto
 {
     public function __construct(
         public string $visibility,

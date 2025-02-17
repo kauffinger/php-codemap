@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use Kauffinger\Codemap\CodemapGenerator;
+use Kauffinger\Codemap\Generator\CodemapGenerator;
 
 test('CodemapGenerator returns empty array for invalid path', function (): void {
     $generator = new CodemapGenerator;

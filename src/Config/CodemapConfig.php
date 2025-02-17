@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Kauffinger\Codemap;
+namespace Kauffinger\Codemap\Config;
 
 use Kauffinger\Codemap\Enum\PhpVersion;
 
@@ -17,7 +17,7 @@ final class CodemapConfig
 
     private function __construct()
     {
-        //
+        // Builder pattern
     }
 
     /**

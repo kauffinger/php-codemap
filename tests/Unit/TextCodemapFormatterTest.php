@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use Kauffinger\Codemap\TextCodemapFormatter;
+use Kauffinger\Codemap\Formatter\TextCodemapFormatter;
 
 test('TextCodemapFormatter correctly formats class, methods, and public properties', function (): void {
     $formatter = new TextCodemapFormatter;

@@ -2,12 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Kauffinger\Codemap;
+namespace Kauffinger\Codemap\Formatter;
 
-use Kauffinger\Codemap\Dto\CodemapClassDto;
 use Kauffinger\Codemap\Dto\CodemapFileDto;
-use Kauffinger\Codemap\Dto\CodemapMethodDto;
-use Kauffinger\Codemap\Dto\CodemapPropertyDto;
 
 final class TextCodemapFormatter
 {
@@ -20,11 +17,9 @@ final class TextCodemapFormatter
         foreach ($results as $fileName => $fileDto) {
             $output .= "File: {$fileName}\n";
 
-            // $fileDto->classes is an array<string, CodemapClassDto>
             foreach ($fileDto->classes as $className => $classDto) {
                 $output .= "  Class: {$className}\n";
 
-                // $classDto->methods is CodemapMethodDto[]
                 foreach ($classDto->methods as $method) {
                     $output .= sprintf(
                         "    %s function %s(): %s\n",
@@ -34,7 +29,6 @@ final class TextCodemapFormatter
                     );
                 }
 
-                // $classDto->properties is CodemapPropertyDto[]
                 // Only show public properties
                 foreach ($classDto->properties as $property) {
                     if ($property->visibility === 'public') {

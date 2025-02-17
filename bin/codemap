@@ -5,6 +5,6 @@ declare(strict_types=1);
 
 require __DIR__ . '/../vendor/autoload.php';
 
-use Kauffinger\Codemap\CodemapCommand;
+use Kauffinger\Codemap\Console\CodemapCommand;
 
 exit((new CodemapCommand())->__invoke($argv));

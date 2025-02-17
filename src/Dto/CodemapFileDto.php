@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Kauffinger\Codemap\Dto;
 
-final class CodemapFileDto
+final readonly class CodemapFileDto
 {
     /**
      * @param  array<string, CodemapClassDto>  $classes

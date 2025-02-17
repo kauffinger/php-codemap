@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use Kauffinger\Codemap\CodemapConfig;
+use Kauffinger\Codemap\Config\CodemapConfig;
 use Kauffinger\Codemap\Enum\PhpVersion;
 
 return CodemapConfig::configure()

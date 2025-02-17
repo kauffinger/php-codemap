@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Kauffinger\Codemap;
+namespace Kauffinger\Codemap\Generator;
 
 use Kauffinger\Codemap\Dto\CodemapClassDto;
 use Kauffinger\Codemap\Dto\CodemapFileDto;
@@ -70,7 +70,6 @@ final class CodemapGenerator
             }
 
             $parsed = $this->processFile($file->getRealPath());
-            // Merge results by file name
             foreach ($parsed as $fileName => $dto) {
                 $results[$fileName] = $dto;
             }
@@ -111,7 +110,6 @@ final class CodemapGenerator
 
         $visitor = new class extends NodeVisitorAbstract
         {
-            /* @phpstan-ignore-next-line */
             public array $classes = [];
 
             private ?string $currentClassName = null;

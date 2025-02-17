@@ -2,7 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Kauffinger\Codemap;
+namespace Kauffinger\Codemap\Console;
+
+use Kauffinger\Codemap\Config\CodemapConfig;
+use Kauffinger\Codemap\Enum\PhpVersion;
+use Kauffinger\Codemap\Formatter\TextCodemapFormatter;
+use Kauffinger\Codemap\Generator\CodemapGenerator;
 
 final class CodemapCommand
 {
@@ -26,19 +31,17 @@ final class CodemapCommand
             // Attempt to parse composer.json
             $composerJsonPath = __DIR__.'/../composer.json';
             $composerJson = json_decode(file_get_contents($composerJsonPath) ?: '', true);
-            /* @phpstan-ignore-next-line */
             $versionString = $composerJson['require']['php'] ?? '^8.4.0';
 
             // Extract the minor version from something like ^8.3.0
             $parsedVersion = '8.4';
-            /* @phpstan-ignore-next-line */
             if (preg_match('/(\d+\.\d+)/', (string) $versionString, $matches)) {
                 $parsedVersion = $matches[1]; // e.g. "8.3"
             }
 
             // Map parsedVersion to our enum
-            $enumVersion = Enum\PhpVersion::PHP_8_4;
-            foreach (Enum\PhpVersion::cases() as $case) {
+            $enumVersion = PhpVersion::PHP_8_4;
+            foreach (PhpVersion::cases() as $case) {
                 if ($case->value === $parsedVersion) {
                     $enumVersion = $case;
                     break;
@@ -51,7 +54,7 @@ final class CodemapCommand
 
 declare(strict_types=1);
 
-use Kauffinger\\Codemap\\CodemapConfig;
+use Kauffinger\\Codemap\\Config\\CodemapConfig;
 use Kauffinger\\Codemap\\Enum\\PhpVersion;
 
 return CodemapConfig::configure()
@@ -90,10 +93,10 @@ PHP;
         $generator = new CodemapGenerator;
 
         // If configPhpVersion is specified, map it to PhpParser's version if possible.
-        if ($configPhpVersion instanceof Enum\PhpVersion) {
+        if ($configPhpVersion instanceof PhpVersion) {
             $generator->setPhpParserVersion(\PhpParser\PhpVersion::fromString($configPhpVersion->value));
         }
-        /** @var array<string, Dto\CodemapFileDto> $allResults */
+
         $allResults = [];
 
         foreach ($pathsToScan as $path) {
@@ -103,17 +106,14 @@ PHP;
                 continue;
             }
 
-            // Each $results is array<string, CodemapFileDto>
             $results = $generator->generate($path);
 
-            // Merge them by filename
             foreach ($results as $fileName => $dto) {
                 $allResults[$fileName] = $dto;
             }
         }
 
         $formatter = new TextCodemapFormatter;
-        // Now $allResults is array<string, CodemapFileDto>
         $output = $formatter->format($allResults);
 
         file_put_contents($outputFile, $output);
