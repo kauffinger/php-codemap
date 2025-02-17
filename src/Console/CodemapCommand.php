@@ -23,13 +23,13 @@ final class CodemapCommand
         array_shift($args);
 
         // Attempt to load codemap.php from project root:
-        $configFile = __DIR__.'/../codemap.php';
+        $configFile = __DIR__.'/../../codemap.php';
         $configPaths = [];
         $configPhpVersion = null;
 
         if (! file_exists($configFile)) {
             // Attempt to parse composer.json
-            $composerJsonPath = __DIR__.'/../composer.json';
+            $composerJsonPath = __DIR__.'/../../composer.json';
             $composerJson = json_decode(file_get_contents($composerJsonPath) ?: '', true);
             $versionString = $composerJson['require']['php'] ?? '^8.4.0';
 
@@ -84,11 +84,11 @@ PHP;
 
         // If no CLI paths are provided, default to config paths or fallback to src folder
         if ($args === []) {
-            $args = $configPaths === [] ? [__DIR__.'/../src'] : $configPaths;
+            $args = $configPaths === [] ? [__DIR__.'/../../src'] : $configPaths;
         }
 
         $pathsToScan = $args;
-        $outputFile = __DIR__.'/../codemap.txt';
+        $outputFile = __DIR__.'/../../codemap.txt';
 
         $generator = new CodemapGenerator;
 
