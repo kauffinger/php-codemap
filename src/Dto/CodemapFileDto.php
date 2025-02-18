@@ -8,8 +8,10 @@ final readonly class CodemapFileDto
 {
     /**
      * @param  array<string, CodemapClassDto>  $classesInFile  Map of FQCN => CodemapClassDto
+     * @param  array<string, CodemapEnumDto>  $enumsInFile  Map of FQCN => CodemapEnumDto
      */
     public function __construct(
-        public array $classesInFile = []
+        public array $classesInFile = [],
+        public array $enumsInFile = [],
     ) {}
 }

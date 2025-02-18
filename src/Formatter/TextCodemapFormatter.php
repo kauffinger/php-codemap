@@ -32,6 +32,15 @@ final class TextCodemapFormatter
                     }
                 }
             }
+
+            foreach ($fileData->enumsInFile as $enumName => $enumDto) {
+                $backingInfo = $enumDto->backingType ? ": {$enumDto->backingType}" : '';
+                $lines[] = "  Enum: {$enumName}{$backingInfo}";
+                foreach ($enumDto->cases as $caseName => $caseValue) {
+                    $lines[] = $caseValue === null ? "    case {$caseName}" : "    case {$caseName} = {$caseValue}";
+                }
+            }
+
             $lines[] = '';
         }
 

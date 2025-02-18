@@ -12,11 +12,15 @@ File: Dto/CodemapMethodDto.php
 
 File: Dto/CodemapFileDto.php
   Class: Kauffinger\Codemap\Dto\CodemapFileDto
-    public function __construct(array $classesInFile): mixed
+    public function __construct(array $classesInFile, array $enumsInFile): mixed
 
 File: Dto/CodemapParameterDto.php
   Class: Kauffinger\Codemap\Dto\CodemapParameterDto
     public function __construct(string $parameterName, string $parameterType): mixed
+
+File: Dto/CodemapEnumDto.php
+  Class: Kauffinger\Codemap\Dto\CodemapEnumDto
+    public function __construct(string $enumName, ?string $backingType, array $cases): mixed
 
 File: Config/CodemapConfig.php
   Class: Kauffinger\Codemap\Config\CodemapConfig
@@ -28,18 +32,25 @@ File: Config/CodemapConfig.php
     public function getConfiguredPhpVersion(): ?Kauffinger\Codemap\Enum\PhpVersion
 
 File: Enum/PhpVersion.php
+  Enum: Kauffinger\Codemap\Enum\PhpVersion: string
+    case PHP_8_0 = '8.0'
+    case PHP_8_1 = '8.1'
+    case PHP_8_2 = '8.2'
+    case PHP_8_3 = '8.3'
+    case PHP_8_4 = '8.4'
 
-File: Generator/ClassCollectionVisitor.php
-  Class: Kauffinger\Codemap\Generator\ClassCollectionVisitor
+File: Generator/SymbolCollectionVisitor.php
+  Class: Kauffinger\Codemap\Generator\SymbolCollectionVisitor
     public function enterNode(PhpParser\Node $node): null|int|PhpParser\Node|array
     public function leaveNode(PhpParser\Node $node): null|int|PhpParser\Node|array
     private function renderTypeNode(?PhpParser\Node $typeNode): string
     private function renderComplexType(PhpParser\Node\ComplexType $node): string
     private function handleClassMethod(PhpParser\Node\Stmt\ClassMethod $node): void
     private function handleProperty(PhpParser\Node\Stmt\Property $node): void
-    private function addMethodToCurrentClass(Kauffinger\Codemap\Dto\CodemapMethodDto $method): void
-    private function addPropertyToCurrentClass(Kauffinger\Codemap\Dto\CodemapPropertyDto $property): void
+    private function handleEnumCase(PhpParser\Node\Stmt\EnumCase $node): void
+    private function renderEnumCaseValue(PhpParser\Node $expr): ?string
     public property array $collectedClasses
+    public property array $collectedEnums
 
 File: Generator/CodemapGenerator.php
   Class: Kauffinger\Codemap\Generator\CodemapGenerator

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Kauffinger\Codemap\Generator;
 
 use Kauffinger\Codemap\Dto\CodemapClassDto;
+use Kauffinger\Codemap\Dto\CodemapEnumDto;
 use Kauffinger\Codemap\Dto\CodemapMethodDto;
 use Kauffinger\Codemap\Dto\CodemapParameterDto;
 use Kauffinger\Codemap\Dto\CodemapPropertyDto;
@@ -13,32 +14,57 @@ use PhpParser\Node;
 use PhpParser\Node\ComplexType;
 use PhpParser\Node\Stmt\Class_;
 use PhpParser\Node\Stmt\ClassMethod;
+use PhpParser\Node\Stmt\Enum_;
+use PhpParser\Node\Stmt\EnumCase;
 use PhpParser\Node\Stmt\Property;
 use PhpParser\NodeVisitorAbstract;
 
 /**
- * A node visitor that collects class definitions (plus methods, properties) into CodemapClassDto objects.
+ * A node visitor that collects both classes and enums into DTOs.
  */
-class ClassCollectionVisitor extends NodeVisitorAbstract
+final class SymbolCollectionVisitor extends NodeVisitorAbstract
 {
     /**
      * @var array<string, CodemapClassDto>
      */
     public array $collectedClasses = [];
 
+    /**
+     * @var array<string, CodemapEnumDto>
+     */
+    public array $collectedEnums = [];
+
     private ?string $currentClassName = null;
+
+    private ?string $currentEnumName = null;
 
     #[Override]
     public function enterNode(Node $node): null|int|Node|array
     {
+        // Handle class
         if ($node instanceof Class_) {
-            // Resolve class name (with namespace if available)
             $this->currentClassName = $node->namespacedName
                 ? $node->namespacedName->toString()
                 : (string) $node->name;
 
-            // Initialize an empty CodemapClassDto for this class
             $this->collectedClasses[$this->currentClassName] = new CodemapClassDto;
+        }
+        // Handle enum
+        elseif ($node instanceof Enum_) {
+            $this->currentEnumName = $node->namespacedName
+                ? $node->namespacedName->toString()
+                : (string) $node->name;
+
+            // Check if this is a backed enum
+            $backingType = null;
+            if ($node->scalarType !== null) {
+                $backingType = $this->renderTypeNode($node->scalarType);
+            }
+
+            $this->collectedEnums[$this->currentEnumName] = new CodemapEnumDto(
+                $this->currentEnumName,
+                $backingType
+            );
         }
 
         return null;
@@ -47,18 +73,27 @@ class ClassCollectionVisitor extends NodeVisitorAbstract
     #[Override]
     public function leaveNode(Node $node): null|int|Node|array
     {
-        if ($this->currentClassName === null) {
-            return null;
-        }
-
-        if ($node instanceof ClassMethod) {
-            $this->handleClassMethod($node);
-        } elseif ($node instanceof Property) {
-            $this->handleProperty($node);
-        }
-
-        if ($node instanceof Class_) {
+        // End of a class
+        if ($node instanceof Class_ && $this->currentClassName !== null) {
             $this->currentClassName = null;
+        }
+        // End of an enum
+        elseif ($node instanceof Enum_ && $this->currentEnumName !== null) {
+            $this->currentEnumName = null;
+        }
+        // Inside a class
+        elseif ($this->currentClassName !== null) {
+            if ($node instanceof ClassMethod) {
+                $this->handleClassMethod($node);
+            } elseif ($node instanceof Property) {
+                $this->handleProperty($node);
+            }
+        }
+        // Inside an enum
+        elseif ($this->currentEnumName !== null) {
+            if ($node instanceof EnumCase) {
+                $this->handleEnumCase($node);
+            }
         }
 
         return null;
@@ -109,7 +144,6 @@ class ClassCollectionVisitor extends NodeVisitorAbstract
         $methodParameters = [];
         foreach ($node->getParams() as $param) {
             $paramType = $this->renderTypeNode($param->type);
-            /* @phpstan-ignore-next-line */
             $paramName = is_string($param->var->name) ? $param->var->name : 'unknown';
             $methodParameters[] = new CodemapParameterDto($paramName, $paramType);
         }
@@ -121,7 +155,12 @@ class ClassCollectionVisitor extends NodeVisitorAbstract
             $methodParameters
         );
 
-        $this->addMethodToCurrentClass($newMethod);
+        $oldClassDto = $this->collectedClasses[$this->currentClassName];
+        $updatedMethods = [...$oldClassDto->classMethods, $newMethod];
+        $this->collectedClasses[$this->currentClassName] = new CodemapClassDto(
+            $updatedMethods,
+            $oldClassDto->classProperties
+        );
     }
 
     /**
@@ -142,33 +181,57 @@ class ClassCollectionVisitor extends NodeVisitorAbstract
                 $determinedPropertyType
             );
 
-            $this->addPropertyToCurrentClass($newProperty);
+            $oldClassDto = $this->collectedClasses[$this->currentClassName];
+            $updatedProperties = [...$oldClassDto->classProperties, $newProperty];
+            $this->collectedClasses[$this->currentClassName] = new CodemapClassDto(
+                $oldClassDto->classMethods,
+                $updatedProperties
+            );
         }
     }
 
     /**
-     * Updates the current class DTO by adding a new method.
+     * Processes an EnumCase node, adding each case to the current enum.
      */
-    private function addMethodToCurrentClass(CodemapMethodDto $method): void
+    private function handleEnumCase(EnumCase $node): void
     {
-        $oldClassDto = $this->collectedClasses[$this->currentClassName];
-        $updatedMethods = [...$oldClassDto->classMethods, $method];
-        $this->collectedClasses[$this->currentClassName] = new CodemapClassDto(
-            $updatedMethods,
-            $oldClassDto->classProperties
+        $enumDto = $this->collectedEnums[$this->currentEnumName];
+        $caseName = $node->name->toString();
+
+        // Attempt to determine the case value for backed enums
+        $caseValue = null;
+        if ($node->expr !== null) {
+            $caseValue = $this->renderEnumCaseValue($node->expr);
+        }
+
+        $enumDto->cases[$caseName] = $caseValue;
+        $this->collectedEnums[$this->currentEnumName] = new CodemapEnumDto(
+            $enumDto->enumName,
+            $enumDto->backingType,
+            $enumDto->cases
         );
     }
 
     /**
-     * Updates the current class DTO by adding a new property.
+     * Render an enum case's expression to string if possible (backed enums).
      */
-    private function addPropertyToCurrentClass(CodemapPropertyDto $property): void
+    private function renderEnumCaseValue(Node $expr): ?string
     {
-        $oldClassDto = $this->collectedClasses[$this->currentClassName];
-        $updatedProperties = [...$oldClassDto->classProperties, $property];
-        $this->collectedClasses[$this->currentClassName] = new CodemapClassDto(
-            $oldClassDto->classMethods,
-            $updatedProperties
-        );
+        if ($expr instanceof Node\Scalar\LNumber) {
+            return (string) $expr->value;
+        }
+        if ($expr instanceof Node\Scalar\String_) {
+            // Put quotes around string literals
+            return "'".$expr->value."'";
+        }
+        if ($expr instanceof Node\Expr\ClassConstFetch) {
+            $className = $expr->class->toString();
+            $constName = $expr->name->toString();
+
+            return $className.'::'.$constName;
+        }
+
+        // For other expressions, fallback to null
+        return null;
     }
 }

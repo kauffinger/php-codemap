@@ -9,7 +9,6 @@ use Kauffinger\Codemap\Config\CodemapConfig;
 use Kauffinger\Codemap\Dto\CodemapFileDto;
 use PhpParser\Error;
 use PhpParser\NodeTraverser;
-use PhpParser\NodeVisitor\NameResolver;
 use PhpParser\ParserFactory;
 use PhpParser\PhpVersion;
 use RecursiveDirectoryIterator;
@@ -190,13 +189,13 @@ final class CodemapGenerator
             throw new RuntimeException("Parse error in '$filePath': ".$parseError->getMessage(), $parseError->getCode(), $parseError);
         }
 
-        $classCollectionVisitor = new ClassCollectionVisitor;
+        $symbolCollectionVisitor = new SymbolCollectionVisitor;
 
         $nodeTraverser = new NodeTraverser;
-        $nodeTraverser->addVisitor(new NameResolver);
-        $nodeTraverser->addVisitor($classCollectionVisitor);
+        $nodeTraverser->addVisitor(new \PhpParser\NodeVisitor\NameResolver);
+        $nodeTraverser->addVisitor($symbolCollectionVisitor);
         $nodeTraverser->traverse((array) $abstractSyntaxTree);
 
-        return new CodemapFileDto($classCollectionVisitor->collectedClasses);
+        return new CodemapFileDto($symbolCollectionVisitor->collectedClasses, $symbolCollectionVisitor->collectedEnums);
     }
 }
