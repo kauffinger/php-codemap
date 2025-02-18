@@ -115,6 +115,7 @@ final class CodemapCommand extends Command
         if ($phpVersion instanceof PhpVersion) {
             $codemapGenerator->setPhpParserVersion(\PhpParser\PhpVersion::fromString($phpVersion->value));
         }
+        $codemapGenerator->setErrorHandler(fn ($message) => $this->error($message));
 
         $aggregatedCodemapResults = [];
         foreach ($paths as $scanPath) {

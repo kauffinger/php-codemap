@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kauffinger\Codemap\Generator;
 
+use Closure;
 use Kauffinger\Codemap\Config\CodemapConfig;
 use Kauffinger\Codemap\Dto\CodemapFileDto;
 use PhpParser\Error;
@@ -24,6 +25,8 @@ final class CodemapGenerator
      * @var string[]
      */
     private array $scanPaths = [];
+
+    private ?Closure $errorHandler = null;
 
     /**
      * Initialize the generator with optional configuration.
@@ -58,6 +61,13 @@ final class CodemapGenerator
     public function setScanPaths(array $paths): self
     {
         $this->scanPaths = $paths;
+
+        return $this;
+    }
+
+    public function setErrorHandler(callable $handler): self
+    {
+        $this->errorHandler = $handler;
 
         return $this;
     }
@@ -101,11 +111,29 @@ final class CodemapGenerator
         }
 
         if (is_file($pathToScan)) {
-            return $this->processSingleFile($pathToScan);
+            try {
+                $codemapFileDto = $this->processSingleFile($pathToScan);
+                $relativePath = basename($pathToScan);
+
+                return [$relativePath => $codemapFileDto];
+            } catch (RuntimeException $e) {
+                if ($this->errorHandler instanceof Closure) {
+                    ($this->errorHandler)('Error processing file "'.$pathToScan.'": '.$e->getMessage());
+
+                    return [];
+                }
+
+                throw $e;
+            }
         }
 
         if (! is_dir($pathToScan)) {
             throw new RuntimeException("Path '$pathToScan' is neither a file nor a directory.");
+        }
+
+        $basePath = realpath($pathToScan);
+        if ($basePath === false) {
+            throw new RuntimeException("Cannot resolve base path '$pathToScan'");
         }
 
         $scanResults = [];
@@ -119,8 +147,16 @@ final class CodemapGenerator
             if ($file->getExtension() !== 'php') {
                 continue;
             }
-            $fileResults = $this->processSingleFile($file->getRealPath());
-            $scanResults = array_merge($scanResults, $fileResults);
+            $filePath = $file->getRealPath();
+            $relativePath = str_replace($basePath.DIRECTORY_SEPARATOR, '', $filePath);
+            try {
+                $codemapFileDto = $this->processSingleFile($filePath);
+                $scanResults[$relativePath] = $codemapFileDto;
+            } catch (RuntimeException $e) {
+                if ($this->errorHandler instanceof Closure) {
+                    ($this->errorHandler)('Error processing file "'.$filePath.'": '.$e->getMessage());
+                }
+            }
         }
 
         return $scanResults;
@@ -134,7 +170,7 @@ final class CodemapGenerator
      *
      * @throws RuntimeException
      */
-    private function processSingleFile(string $filePath): array
+    private function processSingleFile(string $filePath): CodemapFileDto
     {
         if (! file_exists($filePath) || pathinfo($filePath, PATHINFO_EXTENSION) !== 'php') {
             throw new RuntimeException("Invalid PHP file: '$filePath'.");
@@ -155,7 +191,6 @@ final class CodemapGenerator
             throw new RuntimeException("Parse error in '$filePath': ".$parseError->getMessage(), $parseError->getCode(), $parseError);
         }
 
-        $fileName = basename($filePath);
         $classCollectionVisitor = new ClassCollectionVisitor;
 
         $nodeTraverser = new NodeTraverser;
@@ -163,8 +198,6 @@ final class CodemapGenerator
         $nodeTraverser->addVisitor($classCollectionVisitor);
         $nodeTraverser->traverse((array) $abstractSyntaxTree);
 
-        $codemapFileDto = new CodemapFileDto($classCollectionVisitor->collectedClasses);
-
-        return [$fileName => $codemapFileDto];
+        return new CodemapFileDto($classCollectionVisitor->collectedClasses);
     }
 }
