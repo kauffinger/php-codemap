@@ -4,10 +4,7 @@ declare(strict_types=1);
 
 namespace Kauffinger\Codemap\Generator;
 
-use Kauffinger\Codemap\Dto\CodemapClassDto;
 use Kauffinger\Codemap\Dto\CodemapFileDto;
-use Kauffinger\Codemap\Dto\CodemapMethodDto;
-use Kauffinger\Codemap\Dto\CodemapPropertyDto;
 use PhpParser\Error;
 use PhpParser\NodeTraverser;
 use PhpParser\NodeVisitor\NameResolver;
@@ -111,35 +108,8 @@ final class CodemapGenerator
         $nodeTraverser->addVisitor($classCollectionVisitor);
         $nodeTraverser->traverse((array) $abstractSyntaxTree);
 
-        // Convert arrays to typed DTOs
-        $discoveredClasses = [];
-        foreach ($classCollectionVisitor->collectedClasses as $className => $classData) {
-            $classMethods = [];
-            foreach ($classData['classMethods'] as $methodData) {
-                $classMethods[] = new CodemapMethodDto(
-                    $methodData['methodVisibility'],
-                    $methodData['methodName'],
-                    $methodData['methodReturnType'],
-                    $methodData['methodParameters'] ?? []
-                );
-            }
-
-            $classProperties = [];
-            foreach ($classData['classProperties'] as $propertyData) {
-                $classProperties[] = new CodemapPropertyDto(
-                    $propertyData['propertyVisibility'],
-                    $propertyData['propertyName'],
-                    $propertyData['propertyType']
-                );
-            }
-
-            $discoveredClasses[$className] = new CodemapClassDto(
-                $classMethods,
-                $classProperties
-            );
-        }
-
-        $codemapFileDto = new CodemapFileDto($discoveredClasses);
+        // Now we can directly use the typed DTOs collected by ClassCollectionVisitor:
+        $codemapFileDto = new CodemapFileDto($classCollectionVisitor->collectedClasses);
 
         return [$fileName => $codemapFileDto];
     }
