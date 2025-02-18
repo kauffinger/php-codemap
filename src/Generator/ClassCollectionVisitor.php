@@ -47,78 +47,17 @@ class ClassCollectionVisitor extends NodeVisitorAbstract
     #[Override]
     public function leaveNode(Node $node): null|int|Node|array
     {
-        // If we have no current class, skip
         if ($this->currentClassName === null) {
             return null;
         }
 
         if ($node instanceof ClassMethod) {
-            // Build the method DTO
-            $methodVisibility = $node->isPublic()
-                ? 'public'
-                : ($node->isProtected() ? 'protected' : 'private');
-
-            $determinedReturnType = $this->renderTypeNode($node->getReturnType());
-
-            // Collect parameters
-            $methodParameters = [];
-            foreach ($node->getParams() as $param) {
-                $paramType = $this->renderTypeNode($param->type);
-                $paramNameNode = $param->var->name;
-
-                if (is_string($paramNameNode)) {
-                    $paramName = $paramNameNode;
-                } elseif ($paramNameNode instanceof Node\Identifier) {
-                    $paramName = $paramNameNode->name;
-                } else {
-                    $paramName = 'unknown';
-                }
-
-                $methodParameters[] = new CodemapParameterDto($paramName, $paramType);
-            }
-
-            $newMethod = new CodemapMethodDto(
-                $methodVisibility,
-                $node->name->toString(),
-                $determinedReturnType,
-                $methodParameters
-            );
-
-            // Rebuild the class DTO with the new method
-            $oldClassDto = $this->collectedClasses[$this->currentClassName];
-            $updatedMethods = [...$oldClassDto->classMethods, $newMethod];
-            $this->collectedClasses[$this->currentClassName] = new CodemapClassDto(
-                $updatedMethods,
-                $oldClassDto->classProperties
-            );
+            $this->handleClassMethod($node);
         } elseif ($node instanceof Property) {
-            $propertyVisibility = $node->isPublic()
-                ? 'public'
-                : ($node->isProtected() ? 'protected' : 'private');
-
-            $determinedPropertyType = $this->renderTypeNode($node->type);
-
-            // Each property statement can define multiple properties
-            // e.g. "public int $a, $b;" => $a and $b
-            foreach ($node->props as $propertyDefinition) {
-                $newProperty = new CodemapPropertyDto(
-                    $propertyVisibility,
-                    $propertyDefinition->name->toString(),
-                    $determinedPropertyType
-                );
-
-                // Rebuild the class DTO with the new property
-                $oldClassDto = $this->collectedClasses[$this->currentClassName];
-                $updatedProperties = [...$oldClassDto->classProperties, $newProperty];
-                $this->collectedClasses[$this->currentClassName] = new CodemapClassDto(
-                    $oldClassDto->classMethods,
-                    $updatedProperties
-                );
-            }
+            $this->handleProperty($node);
         }
 
         if ($node instanceof Class_) {
-            // Once we leave a Class_ node, there's no current class
             $this->currentClassName = null;
         }
 
@@ -126,7 +65,7 @@ class ClassCollectionVisitor extends NodeVisitorAbstract
     }
 
     /**
-     * Renders a (possibly complex) type node into a string (e.g. union, intersection, nullable).
+     * Renders a (possibly complex) type node into a string (e.g., union, intersection, nullable).
      */
     private function renderTypeNode(?Node $typeNode): string
     {
@@ -134,38 +73,101 @@ class ClassCollectionVisitor extends NodeVisitorAbstract
             return 'mixed';
         }
 
-        if ($typeNode instanceof Node\Identifier) {
-            return $typeNode->name;
-        }
-
-        if ($typeNode instanceof Node\Name) {
-            return $typeNode->toString();
-        }
-
-        if ($typeNode instanceof ComplexType) {
-            return $this->renderComplexType($typeNode);
-        }
-
-        return 'mixed';
+        return match (true) {
+            $typeNode instanceof Node\Identifier => $typeNode->name,
+            $typeNode instanceof Node\Name => $typeNode->toString(),
+            $typeNode instanceof ComplexType => $this->renderComplexType($typeNode),
+            default => 'mixed',
+        };
     }
 
     /**
-     * Handles union, intersection, nullable type nodes.
+     * Handles union, intersection, and nullable type nodes, rendering them as strings.
      */
     private function renderComplexType(ComplexType $node): string
     {
-        if ($node instanceof Node\UnionType) {
-            return implode('|', array_map(fn (Node $n) => $this->renderTypeNode($n), $node->types));
+        return match (true) {
+            $node instanceof Node\UnionType => implode('|', array_map(fn (Node $n) => $this->renderTypeNode($n), $node->types)),
+            $node instanceof Node\IntersectionType => implode('&', array_map(fn (Node $n) => $this->renderTypeNode($n), $node->types)),
+            $node instanceof Node\NullableType => '?'.$this->renderTypeNode($node->type),
+            default => 'mixed',
+        };
+    }
+
+    /**
+     * Processes a ClassMethod node, building and adding its DTO to the current class.
+     */
+    private function handleClassMethod(ClassMethod $node): void
+    {
+        $methodVisibility = $node->isPublic()
+            ? 'public'
+            : ($node->isProtected() ? 'protected' : 'private');
+
+        $determinedReturnType = $this->renderTypeNode($node->getReturnType());
+
+        // Build parameter DTOs for the method
+        $methodParameters = [];
+        foreach ($node->getParams() as $param) {
+            $paramType = $this->renderTypeNode($param->type);
+            $paramName = is_string($param->var->name) ? $param->var->name : 'unknown';
+            $methodParameters[] = new CodemapParameterDto($paramName, $paramType);
         }
 
-        if ($node instanceof Node\IntersectionType) {
-            return implode('&', array_map(fn (Node $n) => $this->renderTypeNode($n), $node->types));
-        }
+        $newMethod = new CodemapMethodDto(
+            $methodVisibility,
+            $node->name->toString(),
+            $determinedReturnType,
+            $methodParameters
+        );
 
-        if ($node instanceof Node\NullableType) {
-            return '?'.$this->renderTypeNode($node->type);
-        }
+        $this->addMethodToCurrentClass($newMethod);
+    }
 
-        return 'mixed';
+    /**
+     * Processes a Property node, building and adding its DTO(s) to the current class.
+     */
+    private function handleProperty(Property $node): void
+    {
+        $propertyVisibility = $node->isPublic()
+            ? 'public'
+            : ($node->isProtected() ? 'protected' : 'private');
+
+        $determinedPropertyType = $this->renderTypeNode($node->type);
+
+        foreach ($node->props as $propertyDefinition) {
+            $newProperty = new CodemapPropertyDto(
+                $propertyVisibility,
+                $propertyDefinition->name->toString(),
+                $determinedPropertyType
+            );
+
+            $this->addPropertyToCurrentClass($newProperty);
+        }
+    }
+
+    /**
+     * Updates the current class DTO by adding a new method.
+     */
+    private function addMethodToCurrentClass(CodemapMethodDto $method): void
+    {
+        $oldClassDto = $this->collectedClasses[$this->currentClassName];
+        $updatedMethods = [...$oldClassDto->classMethods, $method];
+        $this->collectedClasses[$this->currentClassName] = new CodemapClassDto(
+            $updatedMethods,
+            $oldClassDto->classProperties
+        );
+    }
+
+    /**
+     * Updates the current class DTO by adding a new property.
+     */
+    private function addPropertyToCurrentClass(CodemapPropertyDto $property): void
+    {
+        $oldClassDto = $this->collectedClasses[$this->currentClassName];
+        $updatedProperties = [...$oldClassDto->classProperties, $property];
+        $this->collectedClasses[$this->currentClassName] = new CodemapClassDto(
+            $oldClassDto->classMethods,
+            $updatedProperties
+        );
     }
 }
