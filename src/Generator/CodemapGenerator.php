@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kauffinger\Codemap\Generator;
 
+use Kauffinger\Codemap\Config\CodemapConfig;
 use Kauffinger\Codemap\Dto\CodemapFileDto;
 use PhpParser\Error;
 use PhpParser\NodeTraverser;
@@ -12,6 +13,7 @@ use PhpParser\ParserFactory;
 use PhpParser\PhpVersion;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
+use RuntimeException;
 use SplFileInfo;
 
 final class CodemapGenerator
@@ -19,34 +21,91 @@ final class CodemapGenerator
     private ?PhpVersion $phpParserVersion = null;
 
     /**
-     * Optionally set the PHP version used by PhpParser.
+     * @var string[]
      */
-    public function setPhpParserVersion(?PhpVersion $version): void
+    private array $scanPaths = [];
+
+    /**
+     * Initialize the generator with optional configuration.
+     */
+    public function __construct(?CodemapConfig $config = null)
     {
-        $this->phpParserVersion = $version;
+        if ($config instanceof CodemapConfig) {
+            $this->phpParserVersion = $config->getConfiguredPhpVersion();
+            $this->scanPaths = $config->getScanPaths();
+        }
     }
 
     /**
-     * Scans the provided path (directory or single file).
-     * If it's a directory, scans recursively for PHP files.
-     * If it's a single file, parses just that file.
+     * Set the PHP version for parsing, fluently.
      *
-     * @return array<string, CodemapFileDto> A map of fileName => codemap DTO
+     * @param  ?PhpVersion  $version  The PHP version to use for parsing.
+     * @return $this
      */
-    public function generate(string $pathToScan): array
+    public function setPhpParserVersion(?PhpVersion $version): self
     {
-        if (! file_exists($pathToScan)) {
-            return [];
+        $this->phpParserVersion = $version;
+
+        return $this;
+    }
+
+    /**
+     * Set the paths to scan, fluently.
+     *
+     * @param  string[]  $paths  The paths to scan for PHP files.
+     * @return $this
+     */
+    public function setScanPaths(array $paths): self
+    {
+        $this->scanPaths = $paths;
+
+        return $this;
+    }
+
+    /**
+     * Generate the codemap by scanning the configured or provided path.
+     *
+     * @param  string|null  $pathToScan  Optional path to override configured scan paths.
+     * @return array<string, CodemapFileDto> A map of filename => codemap DTO.
+     *
+     * @throws RuntimeException If file reading or parsing fails.
+     */
+    public function generate(?string $pathToScan = null): array
+    {
+        $paths = $pathToScan ? [$pathToScan] : $this->scanPaths;
+
+        if ($paths === []) {
+            throw new RuntimeException('No scan paths provided or configured.');
         }
 
-        // If path is a file, parse that single file
+        $results = [];
+        foreach ($paths as $path) {
+            $results = array_merge($results, $this->scanPath($path));
+        }
+
+        return $results;
+    }
+
+    /**
+     * Scan a single path (file or directory) and return codemap results.
+     *
+     * @param  string  $pathToScan  The path to scan.
+     * @return array<string, CodemapFileDto>
+     *
+     * @throws RuntimeException
+     */
+    private function scanPath(string $pathToScan): array
+    {
+        if (! file_exists($pathToScan)) {
+            throw new RuntimeException("Path '$pathToScan' does not exist.");
+        }
+
         if (is_file($pathToScan)) {
             return $this->processSingleFile($pathToScan);
         }
 
-        // Otherwise, if path is a directory, scan recursively
         if (! is_dir($pathToScan)) {
-            return [];
+            throw new RuntimeException("Path '$pathToScan' is neither a file nor a directory.");
         }
 
         $scanResults = [];
@@ -57,29 +116,28 @@ final class CodemapGenerator
             if ($file->isDir()) {
                 continue;
             }
-
             if ($file->getExtension() !== 'php') {
                 continue;
             }
-
-            $parsedFileResults = $this->processSingleFile($file->getRealPath());
-            foreach ($parsedFileResults as $fileName => $codemapFileDto) {
-                $scanResults[$fileName] = $codemapFileDto;
-            }
+            $fileResults = $this->processSingleFile($file->getRealPath());
+            $scanResults = array_merge($scanResults, $fileResults);
         }
 
         return $scanResults;
     }
 
     /**
-     * Processes a single PHP file, returning codemap data in a DTO.
+     * Process a single PHP file and return its codemap data.
      *
-     * @return array<string, CodemapFileDto> The codemap results for this file
+     * @param  string  $filePath  The path to the PHP file.
+     * @return array<string, CodemapFileDto>
+     *
+     * @throws RuntimeException
      */
     private function processSingleFile(string $filePath): array
     {
         if (! file_exists($filePath) || pathinfo($filePath, PATHINFO_EXTENSION) !== 'php') {
-            return [];
+            throw new RuntimeException("Invalid PHP file: '$filePath'.");
         }
 
         $parser = (new ParserFactory)->createForVersion(
@@ -88,19 +146,16 @@ final class CodemapGenerator
 
         $fileContents = file_get_contents($filePath);
         if ($fileContents === false) {
-            return [];
+            throw new RuntimeException("Failed to read file: '$filePath'.");
         }
 
         try {
             $abstractSyntaxTree = $parser->parse($fileContents);
         } catch (Error $parseError) {
-            echo 'Parse Error: '.$parseError->getMessage().PHP_EOL;
-
-            return [];
+            throw new RuntimeException("Parse error in '$filePath': ".$parseError->getMessage(), $parseError->getCode(), $parseError);
         }
 
         $fileName = basename($filePath);
-
         $classCollectionVisitor = new ClassCollectionVisitor;
 
         $nodeTraverser = new NodeTraverser;
@@ -108,7 +163,6 @@ final class CodemapGenerator
         $nodeTraverser->addVisitor($classCollectionVisitor);
         $nodeTraverser->traverse((array) $abstractSyntaxTree);
 
-        // Now we can directly use the typed DTOs collected by ClassCollectionVisitor:
         $codemapFileDto = new CodemapFileDto($classCollectionVisitor->collectedClasses);
 
         return [$fileName => $codemapFileDto];
