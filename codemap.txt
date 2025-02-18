@@ -1,0 +1,70 @@
+File: Dto/CodemapClassDto.php
+  Class: Kauffinger\Codemap\Dto\CodemapClassDto
+    public function __construct(array $classMethods, array $classProperties): mixed
+
+File: Dto/CodemapPropertyDto.php
+  Class: Kauffinger\Codemap\Dto\CodemapPropertyDto
+    public function __construct(string $propertyVisibility, string $propertyName, string $propertyType): mixed
+
+File: Dto/CodemapMethodDto.php
+  Class: Kauffinger\Codemap\Dto\CodemapMethodDto
+    public function __construct(string $methodVisibility, string $methodName, string $methodReturnType, array $methodParameters): mixed
+
+File: Dto/CodemapFileDto.php
+  Class: Kauffinger\Codemap\Dto\CodemapFileDto
+    public function __construct(array $classesInFile): mixed
+
+File: Dto/CodemapParameterDto.php
+  Class: Kauffinger\Codemap\Dto\CodemapParameterDto
+    public function __construct(string $parameterName, string $parameterType): mixed
+
+File: Config/CodemapConfig.php
+  Class: Kauffinger\Codemap\Config\CodemapConfig
+    private function __construct(): mixed
+    public function configure(): self
+    public function withScanPaths(array $scanPaths): self
+    public function withPhpVersion(Kauffinger\Codemap\Enum\PhpVersion $phpVersion): self
+    public function getScanPaths(): array
+    public function getConfiguredPhpVersion(): ?Kauffinger\Codemap\Enum\PhpVersion
+
+File: Enum/PhpVersion.php
+
+File: Generator/ClassCollectionVisitor.php
+  Class: Kauffinger\Codemap\Generator\ClassCollectionVisitor
+    public function enterNode(PhpParser\Node $node): null|int|PhpParser\Node|array
+    public function leaveNode(PhpParser\Node $node): null|int|PhpParser\Node|array
+    private function renderTypeNode(?PhpParser\Node $typeNode): string
+    private function renderComplexType(PhpParser\Node\ComplexType $node): string
+    private function handleClassMethod(PhpParser\Node\Stmt\ClassMethod $node): void
+    private function handleProperty(PhpParser\Node\Stmt\Property $node): void
+    private function addMethodToCurrentClass(Kauffinger\Codemap\Dto\CodemapMethodDto $method): void
+    private function addPropertyToCurrentClass(Kauffinger\Codemap\Dto\CodemapPropertyDto $property): void
+    public property array $collectedClasses
+
+File: Generator/CodemapGenerator.php
+  Class: Kauffinger\Codemap\Generator\CodemapGenerator
+    public function __construct(?Kauffinger\Codemap\Config\CodemapConfig $config): mixed
+    public function setPhpParserVersion(?PhpParser\PhpVersion $version): self
+    public function setScanPaths(array $paths): self
+    public function setErrorHandler(Closure $handler): self
+    public function generate(?string $pathToScan): array
+    private function scanPath(string $pathToScan): array
+    private function processSingleFile(string $filePath): Kauffinger\Codemap\Dto\CodemapFileDto
+
+File: Formatter/TextCodemapFormatter.php
+  Class: Kauffinger\Codemap\Formatter\TextCodemapFormatter
+    public function format(array $codemapData): string
+    private function formatMethod(Kauffinger\Codemap\Dto\CodemapMethodDto $methodInformation): string
+    private function formatParameters(array $parameters): string
+    private function formatProperty(Kauffinger\Codemap\Dto\CodemapPropertyDto $propertyInformation): string
+
+File: Console/CodemapCommand.php
+  Class: Kauffinger\Codemap\Console\CodemapCommand
+    protected function configure(): void
+    protected function execute(Symfony\Component\Console\Input\InputInterface $input, Symfony\Component\Console\Output\OutputInterface $output): int
+    protected function handle(): int
+    private function generateDefaultConfig(Kauffinger\Codemap\Enum\PhpVersion $mappedPhpVersion): string
+    protected function info(string $message): void
+    protected function error(string $message): void
+    protected function argument(string $name): mixed
+    protected function option(string $name): mixed
