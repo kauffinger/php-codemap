@@ -144,6 +144,7 @@ final class SymbolCollectionVisitor extends NodeVisitorAbstract
         $methodParameters = [];
         foreach ($node->getParams() as $param) {
             $paramType = $this->renderTypeNode($param->type);
+            /* @phpstan-ignore-next-line */
             $paramName = is_string($param->var->name) ? $param->var->name : 'unknown';
             $methodParameters[] = new CodemapParameterDto($paramName, $paramType);
         }
@@ -225,7 +226,9 @@ final class SymbolCollectionVisitor extends NodeVisitorAbstract
             return "'".$expr->value."'";
         }
         if ($expr instanceof Node\Expr\ClassConstFetch) {
+            /* @phpstan-ignore-next-line */
             $className = $expr->class->toString();
+            /* @phpstan-ignore-next-line */
             $constName = $expr->name->toString();
 
             return $className.'::'.$constName;
