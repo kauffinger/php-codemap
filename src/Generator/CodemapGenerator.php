@@ -34,7 +34,7 @@ final class CodemapGenerator
     public function __construct(?CodemapConfig $config = null)
     {
         if ($config instanceof CodemapConfig) {
-            $this->phpParserVersion = $config->getConfiguredPhpVersion();
+            $this->phpParserVersion = $config->getConfiguredPhpVersion()?->toParserPhpVersion();
             $this->scanPaths = $config->getScanPaths();
         }
     }
@@ -65,7 +65,7 @@ final class CodemapGenerator
         return $this;
     }
 
-    public function setErrorHandler(callable $handler): self
+    public function setErrorHandler(Closure $handler): self
     {
         $this->errorHandler = $handler;
 
@@ -166,7 +166,6 @@ final class CodemapGenerator
      * Process a single PHP file and return its codemap data.
      *
      * @param  string  $filePath  The path to the PHP file.
-     * @return array<string, CodemapFileDto>
      *
      * @throws RuntimeException
      */

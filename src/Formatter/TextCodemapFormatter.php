@@ -56,6 +56,8 @@ final class TextCodemapFormatter
 
     /**
      * Formats an array of method parameters into a comma-separated string.
+     *
+     * @param  CodemapParameterDto[]  $parameters
      */
     private function formatParameters(array $parameters): string
     {

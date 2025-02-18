@@ -109,6 +109,7 @@ class ClassCollectionVisitor extends NodeVisitorAbstract
         $methodParameters = [];
         foreach ($node->getParams() as $param) {
             $paramType = $this->renderTypeNode($param->type);
+            /* @phpstan-ignore-next-line */
             $paramName = is_string($param->var->name) ? $param->var->name : 'unknown';
             $methodParameters[] = new CodemapParameterDto($paramName, $paramType);
         }
