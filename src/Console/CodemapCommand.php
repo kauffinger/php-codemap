@@ -8,40 +8,66 @@ use Kauffinger\Codemap\Config\CodemapConfig;
 use Kauffinger\Codemap\Enum\PhpVersion;
 use Kauffinger\Codemap\Formatter\TextCodemapFormatter;
 use Kauffinger\Codemap\Generator\CodemapGenerator;
+use Override;
+use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Input\InputArgument;
+use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Input\InputOption;
+use Symfony\Component\Console\Output\OutputInterface;
 
-final class CodemapCommand
+/**
+ * Generates a codemap of PHP code, scanning specified paths and writing the output to a file or stdout.
+ */
+final class CodemapCommand extends Command
 {
     /**
-     * Invokes the codemap command.
-     *
-     * @param  string[]  $commandArguments  The command-line arguments (if any).
-     * @return int Exit code.
+     * Configures the command with arguments and options.
      */
-    public function __invoke(array $commandArguments): int
+    #[Override]
+    protected function configure(): void
     {
-        // The first element is usually the script name, so remove it
-        array_shift($commandArguments);
+        $this
+            ->setName('codemap')
+            ->setDescription('Generate a codemap of PHP code')
+            ->addArgument('paths', InputArgument::IS_ARRAY | InputArgument::OPTIONAL, 'Paths to scan', [])
+            ->addOption('output', 'o', InputOption::VALUE_REQUIRED, 'Output file path (use "-" for stdout)', 'codemap.txt')
+            ->addOption('php-version', null, InputOption::VALUE_REQUIRED, 'PHP version to use for parsing (e.g., "8.3")');
+    }
 
-        // Attempt to load codemap.php from project root:
+    /**
+     * Executes the codemap generation process.
+     *
+     * @param  InputInterface  $input  The command input
+     * @param  OutputInterface  $output  The command output
+     * @return int Exit code (0 for success, 1 for failure)
+     */
+    #[Override]
+    protected function execute(InputInterface $input, OutputInterface $output): int
+    {
         $codemapConfigFilePath = __DIR__.'/../../codemap.php';
         $configuredScanPaths = [];
         $configuredPhpVersion = null;
 
-        // Check if codemap.php exists, otherwise attempt to parse composer.json
-        if (! file_exists($codemapConfigFilePath)) {
-            // Attempt to parse composer.json
+        if (file_exists($codemapConfigFilePath)) {
+            $codemapConfiguration = require $codemapConfigFilePath;
+            if ($codemapConfiguration instanceof CodemapConfig) {
+                $configuredScanPaths = $codemapConfiguration->getScanPaths();
+                $configuredPhpVersion = $codemapConfiguration->getConfiguredPhpVersion();
+            }
+        } else {
+            // Attempt to parse composer.json for PHP version
             $composerJsonPath = __DIR__.'/../../composer.json';
             $composerContents = file_get_contents($composerJsonPath) ?: '';
             $composerData = json_decode($composerContents, true);
             $composerPhpVersionString = $composerData['require']['php'] ?? '^8.4.0';
 
-            // Extract the minor version from something like ^8.3.0
+            // Extract minor version (e.g., "8.4")
             $parsedComposerVersion = '8.4';
             if (preg_match('/(\d+\.\d+)/', (string) $composerPhpVersionString, $matches)) {
-                $parsedComposerVersion = $matches[1]; // e.g. "8.3"
+                $parsedComposerVersion = $matches[1];
             }
 
-            // Map parsedComposerVersion to our enum
+            // Map to PhpVersion enum
             $mappedPhpVersion = PhpVersion::PHP_8_4;
             foreach (PhpVersion::cases() as $phpVersionCase) {
                 if ($phpVersionCase->value === $parsedComposerVersion) {
@@ -50,47 +76,48 @@ final class CodemapCommand
                 }
             }
 
-            // Create a default codemap.php
+            // Generate and write default config
             $generatedDefaultConfig = $this->generateDefaultConfig($mappedPhpVersion);
-
             file_put_contents($codemapConfigFilePath, $generatedDefaultConfig);
-            echo "Created default codemap config at: {$codemapConfigFilePath}".PHP_EOL;
+            $output->writeln('<info>Created default codemap config at: '.$codemapConfigFilePath.'</info>');
+            $configuredScanPaths = [__DIR__.'/../../src'];
+            $configuredPhpVersion = $mappedPhpVersion;
         }
 
-        if (file_exists($codemapConfigFilePath)) {
-            $codemapConfiguration = require $codemapConfigFilePath;
-            if ($codemapConfiguration instanceof CodemapConfig) {
-                $configuredScanPaths = $codemapConfiguration->getScanPaths();
-                $configuredPhpVersion = $codemapConfiguration->getConfiguredPhpVersion();
+        // Determine scan paths: CLI arguments or configured defaults
+        $paths = $input->getArgument('paths');
+        if (empty($paths)) {
+            $paths = $configuredScanPaths;
+        }
+
+        // Determine PHP version: CLI option or configured default
+        $phpVersionString = $input->getOption('php-version');
+        if ($phpVersionString) {
+            $phpVersion = PhpVersion::tryFrom($phpVersionString);
+            if (! $phpVersion instanceof PhpVersion) {
+                $output->writeln('<error>Invalid PHP version: '.$phpVersionString.'</error>');
+
+                return Command::FAILURE;
             }
+        } else {
+            $phpVersion = $configuredPhpVersion;
         }
 
-        // If no CLI paths are provided, default to config paths or fallback to src folder
-        if ($commandArguments === []) {
-            $commandArguments = $configuredScanPaths === [] ? [__DIR__.'/../../src'] : $configuredScanPaths;
-        }
-
-        $targetScanPaths = $commandArguments;
-        $outputFilePath = __DIR__.'/../../codemap.txt';
+        $outputFile = $input->getOption('output');
 
         $codemapGenerator = new CodemapGenerator;
-
-        // If a configured PHP version is specified, map it to PhpParser's version if possible.
-        if ($configuredPhpVersion instanceof PhpVersion) {
-            $codemapGenerator->setPhpParserVersion(\PhpParser\PhpVersion::fromString($configuredPhpVersion->value));
+        if ($phpVersion instanceof PhpVersion) {
+            $codemapGenerator->setPhpParserVersion(\PhpParser\PhpVersion::fromString($phpVersion->value));
         }
 
         $aggregatedCodemapResults = [];
-
-        foreach ($targetScanPaths as $scanPath) {
+        foreach ($paths as $scanPath) {
             if (! file_exists($scanPath)) {
-                echo "Warning: Path '$scanPath' does not exist.".PHP_EOL;
+                $output->writeln('<error>Warning: Path \''.$scanPath.'\' does not exist.</error>');
 
                 continue;
             }
-
             $fileResults = $codemapGenerator->generate($scanPath);
-
             foreach ($fileResults as $fileName => $codemapDto) {
                 $aggregatedCodemapResults[$fileName] = $codemapDto;
             }
@@ -99,12 +126,22 @@ final class CodemapCommand
         $formatter = new TextCodemapFormatter;
         $formattedCodemapOutput = $formatter->format($aggregatedCodemapResults);
 
-        file_put_contents($outputFilePath, $formattedCodemapOutput);
-        echo "Codemap generated at: {$outputFilePath}".PHP_EOL;
+        if ($outputFile === '-') {
+            $output->write($formattedCodemapOutput);
+        } else {
+            file_put_contents($outputFile, $formattedCodemapOutput);
+            $output->writeln('<info>Codemap generated at: '.$outputFile.'</info>');
+        }
 
-        return 0;
+        return Command::SUCCESS;
     }
 
+    /**
+     * Generates the content for a default codemap configuration file.
+     *
+     * @param  PhpVersion  $mappedPhpVersion  The PHP version to include in the config
+     * @return string The configuration file content
+     */
     private function generateDefaultConfig(PhpVersion $mappedPhpVersion): string
     {
         return <<<PHP

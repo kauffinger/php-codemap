@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Kauffinger\Codemap\Console\CodemapCommand;
+use Symfony\Component\Console\Tester\CommandTester;
 
 test('CodemapCommand runs without error and generates codemap.txt', function (): void {
     // Use a temp directory for output
@@ -21,24 +22,33 @@ class TestClass {
 }
 PHP);
 
-    // Mock CLI arguments (script name + path to scan)
-    $args = [
-        'codemap', // script name (ignored in the command)
-        $testFile,
-    ];
+    // Set the output file path within the temporary directory
+    $codemapFilePath = $tempDir.DIRECTORY_SEPARATOR.'codemap.txt';
 
-    // Call the command
-    $exitCode = (new CodemapCommand)->__invoke($args);
+    // Create and set up the command tester
+    $command = new CodemapCommand;
+    $commandTester = new CommandTester($command);
 
-    // Assert command success
-    expect($exitCode)->toBe(0);
+    // Execute the command with arguments and options
+    $commandTester->execute([
+        'paths' => [$testFile],
+        '--output' => $codemapFilePath,
+    ]);
 
-    // Check if codemap.txt got created (in the project root by default)
-    $codemapFilePath = __DIR__.'/../../codemap.txt';
+    // Assert command executed successfully
+    expect($commandTester->getStatusCode())->toBe(0);
+
+    // Check if codemap.txt was created
     expect(file_exists($codemapFilePath))->toBeTrue();
+
+    // Verify the content of the generated codemap
+    $codemapContent = file_get_contents($codemapFilePath);
+    expect($codemapContent)->toContain('File: TestClass.php')
+        ->toContain('Class: TestClass')
+        ->toContain('public function hello(): string');
 
     // Clean up
     unlink($testFile);
-    rmdir($tempDir);
     unlink($codemapFilePath);
+    rmdir($tempDir);
 });
