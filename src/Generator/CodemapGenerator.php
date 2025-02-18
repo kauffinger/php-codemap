@@ -9,13 +9,8 @@ use Kauffinger\Codemap\Dto\CodemapFileDto;
 use Kauffinger\Codemap\Dto\CodemapMethodDto;
 use Kauffinger\Codemap\Dto\CodemapPropertyDto;
 use PhpParser\Error;
-use PhpParser\Node;
-use PhpParser\Node\Stmt\Class_;
-use PhpParser\Node\Stmt\ClassMethod;
-use PhpParser\Node\Stmt\Property;
 use PhpParser\NodeTraverser;
 use PhpParser\NodeVisitor\NameResolver;
-use PhpParser\NodeVisitorAbstract;
 use PhpParser\ParserFactory;
 use PhpParser\PhpVersion;
 use RecursiveDirectoryIterator;
@@ -25,39 +20,6 @@ use SplFileInfo;
 final class CodemapGenerator
 {
     private ?PhpVersion $phpParserVersion = null;
-
-    /**
-     * Renders a complex type (union/intersection) as a string.
-     */
-    public function renderComplexType(Node\ComplexType $node): string
-    {
-        if ($node instanceof Node\UnionType) {
-            return implode('|', array_map(fn (Node $n) => $this->typeNodeToString($n), $node->types));
-        }
-        if ($node instanceof Node\IntersectionType) {
-            return implode('&', array_map(fn (Node $n) => $this->typeNodeToString($n), $node->types));
-        }
-        if ($node instanceof Node\NullableType) {
-            return '?'.$this->typeNodeToString($node->type);
-        }
-
-        return 'mixed';
-    }
-
-    private function typeNodeToString(Node $n): string
-    {
-        if ($n instanceof Node\Identifier) {
-            return $n->name;
-        }
-        if ($n instanceof Node\Name) {
-            return $n->toString();
-        }
-        if ($n instanceof Node\ComplexType) {
-            return $this->renderComplexType($n);
-        }
-
-        return 'mixed';
-    }
 
     /**
      * Optionally set the PHP version used by PhpParser.
@@ -142,103 +104,7 @@ final class CodemapGenerator
 
         $fileName = basename($filePath);
 
-        $classCollectionVisitor = new class($this) extends NodeVisitorAbstract
-        {
-            public array $collectedClasses = [];
-
-            private ?string $currentClassName = null;
-
-            public function __construct(
-                private readonly CodemapGenerator $generator
-            ) {}
-
-            public function enterNode(Node\ComplexType|Node $node): void
-            {
-                if ($node instanceof Class_) {
-                    $this->currentClassName = $node->namespacedName
-                        ? $node->namespacedName->toString()
-                        : (string) $node->name;
-
-                    $this->collectedClasses[$this->currentClassName] = [
-                        'classMethods' => [],
-                        'classProperties' => [],
-                    ];
-                } elseif ($node instanceof ClassMethod && $this->currentClassName !== null) {
-                    $methodVisibility = $node->isPublic()
-                        ? 'public'
-                        : ($node->isProtected() ? 'protected' : 'private');
-
-                    $returnTypeNode = $node->getReturnType();
-                    if ($returnTypeNode instanceof Node\Identifier) {
-                        $determinedReturnType = $returnTypeNode->name;
-                    } elseif ($returnTypeNode instanceof Node\Name) {
-                        $determinedReturnType = $returnTypeNode->toString();
-                    } elseif ($returnTypeNode instanceof Node\ComplexType) {
-                        // e.g. Union or Intersection types
-                        $determinedReturnType = $this->generator->renderComplexType($returnTypeNode);
-                    } else {
-                        $determinedReturnType = 'mixed';
-                    }
-
-                    // Collect parameters
-                    $methodParameters = [];
-                    foreach ($node->getParams() as $param) {
-                        $paramType = 'mixed';
-                        if ($param->type instanceof Node\Identifier) {
-                            $paramType = $param->type->name;
-                        } elseif ($param->type instanceof Node\Name) {
-                            $paramType = $param->type->toString();
-                        } elseif ($param->type instanceof Node\ComplexType) {
-                            $paramType = $this->generator->renderComplexType($param->type);
-                        }
-
-                        $paramNameNode = $param->var->name;
-                        if (is_string($paramNameNode)) {
-                            $paramName = $paramNameNode;
-                        } elseif ($paramNameNode instanceof Node\Identifier) {
-                            $paramName = $paramNameNode->name;
-                        } else {
-                            $paramName = 'unknown';
-                        }
-
-                        $methodParameters[] = [
-                            'parameterName' => $paramName,
-                            'parameterType' => $paramType,
-                        ];
-                    }
-
-                    $this->collectedClasses[$this->currentClassName]['classMethods'][] = [
-                        'methodVisibility' => $methodVisibility,
-                        'methodName' => $node->name->toString(),
-                        'methodReturnType' => $determinedReturnType,
-                        'methodParameters' => $methodParameters,
-                    ];
-                } elseif ($node instanceof Property && $this->currentClassName !== null) {
-                    $propertyVisibility = $node->isPublic()
-                        ? 'public'
-                        : ($node->isProtected() ? 'protected' : 'private');
-
-                    $propertyTypeNode = $node->type;
-                    if ($propertyTypeNode instanceof Node\Identifier) {
-                        $determinedPropertyType = $propertyTypeNode->name;
-                    } elseif ($propertyTypeNode instanceof Node\Name) {
-                        $determinedPropertyType = $propertyTypeNode->toString();
-                    } elseif ($propertyTypeNode instanceof Node\ComplexType) {
-                        $determinedPropertyType = $this->generator->renderComplexType($propertyTypeNode);
-                    } else {
-                        $determinedPropertyType = 'mixed';
-                    }
-
-                    foreach ($node->props as $propertyDefinition) {
-                        $this->collectedClasses[$this->currentClassName]['classProperties'][] = [
-                            'propertyVisibility' => $propertyVisibility,
-                            'propertyName' => $propertyDefinition->name->toString(),
-                            'propertyType' => $determinedPropertyType,
-                        ];
-                    }
-                }
-            }
-        };
+        $classCollectionVisitor = new ClassCollectionVisitor;
 
         $nodeTraverser = new NodeTraverser;
         $nodeTraverser->addVisitor(new NameResolver);

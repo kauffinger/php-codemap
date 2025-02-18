@@ -26,7 +26,7 @@ final class TextCodemapFormatter
                         if ($paramList !== '') {
                             $paramList .= ', ';
                         }
-                        $paramList .= $param['parameterType'].' $'.$param['parameterName'];
+                        $paramList .= $param->parameterType.' $'.$param->parameterName;
                     }
 
                     $formattedOutput .= sprintf(

@@ -2,36 +2,35 @@
 
 declare(strict_types=1);
 
+use Kauffinger\Codemap\Dto\CodemapClassDto;
+use Kauffinger\Codemap\Dto\CodemapFileDto;
+use Kauffinger\Codemap\Dto\CodemapMethodDto;
+use Kauffinger\Codemap\Dto\CodemapParameterDto;
+use Kauffinger\Codemap\Dto\CodemapPropertyDto;
 use Kauffinger\Codemap\Formatter\TextCodemapFormatter;
 
 test('TextCodemapFormatter correctly formats class, methods, and public properties', function (): void {
     $formatter = new TextCodemapFormatter;
 
     $testData = [
-        'Example.php' => new Kauffinger\Codemap\Dto\CodemapFileDto([
-            'Acme\\Example' => new Kauffinger\Codemap\Dto\CodemapClassDto(
+        'Example.php' => new CodemapFileDto([
+            'Acme\\Example' => new CodemapClassDto(
                 [
-                    new Kauffinger\Codemap\Dto\CodemapMethodDto('public', 'run', 'void'),
-                    new Kauffinger\Codemap\Dto\CodemapMethodDto('protected', 'test', 'mixed'),
-                    new Kauffinger\Codemap\Dto\CodemapMethodDto(
+                    new CodemapMethodDto('public', 'run', 'void'),
+                    new CodemapMethodDto('protected', 'test', 'mixed'),
+                    new CodemapMethodDto(
                         'public',
                         'multipleParams',
                         'int',
                         [
-                            [
-                                'parameterName' => 'input',
-                                'parameterType' => 'string|int',
-                            ],
-                            [
-                                'parameterName' => 'flag',
-                                'parameterType' => 'bool',
-                            ],
+                            new CodemapParameterDto('input', 'string|int'),
+                            new CodemapParameterDto('flag', 'bool'),
                         ]
                     ),
                 ],
                 [
-                    new Kauffinger\Codemap\Dto\CodemapPropertyDto('public', 'foo', 'string'),
-                    new Kauffinger\Codemap\Dto\CodemapPropertyDto('private', 'bar', 'int'),
+                    new CodemapPropertyDto('public', 'foo', 'string'),
+                    new CodemapPropertyDto('private', 'bar', 'int'),
                 ]
             ),
         ]),

@@ -70,7 +70,7 @@ PHP);
         ->and($doSomethingMethod->methodParameters)->toHaveCount(3);
 
     // Confirm each parameter's type
-    expect($doSomethingMethod->methodParameters[0]['parameterType'])->toBe('array|int');
-    expect($doSomethingMethod->methodParameters[1]['parameterType'])->toBe('string');
-    expect($doSomethingMethod->methodParameters[2]['parameterType'])->toBe('Foo\\Bar');
+    expect($doSomethingMethod->methodParameters[0]->parameterType)->toBe('array|int');
+    expect($doSomethingMethod->methodParameters[1]->parameterType)->toBe('string');
+    expect($doSomethingMethod->methodParameters[2]->parameterType)->toBe('Foo\\Bar');
 });
