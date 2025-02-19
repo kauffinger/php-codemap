@@ -7,6 +7,7 @@ namespace Kauffinger\Codemap\Console;
 use Exception;
 use InvalidArgumentException;
 use Kauffinger\Codemap\Config\CodemapConfig;
+use Kauffinger\Codemap\Dto\CodemapFileDto;
 use Kauffinger\Codemap\Enum\PhpVersion;
 use Kauffinger\Codemap\Formatter\TextCodemapFormatter;
 use Kauffinger\Codemap\Generator\CodemapGenerator;
@@ -59,12 +60,17 @@ final class CodemapCommand extends Command
 
             $phpVersion = $this->getPhpVersion($config);
 
+            /* @phpstan-ignore-next-line */
             $codemapResults = $this->generateCodemap($scanPaths, $phpVersion);
 
             $formatter = new TextCodemapFormatter;
             $formattedOutput = $formatter->format($codemapResults);
 
             $outputFile = $this->option('output');
+            if (! is_string($outputFile)) {
+                throw new RuntimeException('Invalid output file path.');
+            }
+
             $this->writeOutput($formattedOutput, $outputFile);
 
             return Command::SUCCESS;
@@ -133,6 +139,10 @@ final class CodemapCommand extends Command
     {
         $phpVersionString = $this->option('php-version');
         if ($phpVersionString) {
+            if (! is_string($phpVersionString) && ! is_int($phpVersionString)) {
+                throw new InvalidArgumentException('Invalid PHP version: '.$phpVersionString);
+            }
+
             $phpVersion = PhpVersion::tryFrom($phpVersionString);
             if (! $phpVersion instanceof PhpVersion) {
                 throw new InvalidArgumentException('Invalid PHP version: '.$phpVersionString);
@@ -144,6 +154,10 @@ final class CodemapCommand extends Command
         return $config->getConfiguredPhpVersion();
     }
 
+    /**
+     * @param  string[]  $scanPaths
+     * @return array<string, CodemapFileDto>
+     */
     private function generateCodemap(array $scanPaths, ?PhpVersion $phpVersion): array
     {
         $codemapGenerator = new CodemapGenerator;
