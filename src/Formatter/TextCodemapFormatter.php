@@ -37,7 +37,7 @@ final class TextCodemapFormatter
                 $backingInfo = $enumDto->backingType ? ": {$enumDto->backingType}" : '';
                 $lines[] = "  Enum: {$enumName}{$backingInfo}";
                 foreach ($enumDto->cases as $caseName => $caseValue) {
-                    $lines[] = $caseValue === null ? "    case {$caseName}" : "    case {$caseName} = {$caseValue}";
+                    $lines[] = $this->formatEnumCase($caseValue, $caseName);
                 }
             }
 
@@ -84,5 +84,10 @@ final class TextCodemapFormatter
             $propertyInformation->propertyType,
             $propertyInformation->propertyName
         );
+    }
+
+    private function formatEnumCase(?string $caseValue, int|string $caseName): string
+    {
+        return $caseValue === null ? "    case {$caseName}" : "    case {$caseName} = {$caseValue}";
     }
 }

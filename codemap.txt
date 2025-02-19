@@ -68,6 +68,7 @@ File: Formatter/TextCodemapFormatter.php
     private function formatMethod(Kauffinger\Codemap\Dto\CodemapMethodDto $methodInformation): string
     private function formatParameters(array $parameters): string
     private function formatProperty(Kauffinger\Codemap\Dto\CodemapPropertyDto $propertyInformation): string
+    private function formatEnumCase(?string $caseValue, int|string $caseName): string
 
 File: Console/CodemapCommand.php
   Class: Kauffinger\Codemap\Console\CodemapCommand
