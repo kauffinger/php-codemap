@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace Kauffinger\Codemap\Console;
 
 use Exception;
+use InvalidArgumentException;
 use Kauffinger\Codemap\Config\CodemapConfig;
 use Kauffinger\Codemap\Enum\PhpVersion;
 use Kauffinger\Codemap\Formatter\TextCodemapFormatter;
 use Kauffinger\Codemap\Generator\CodemapGenerator;
 use Override;
+use RuntimeException;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
@@ -44,120 +46,146 @@ final class CodemapCommand extends Command
 
     protected function handle(): int
     {
-        $codemapConfigFilePath = getcwd().'/codemap.php';
-        $configuredScanPaths = [];
-        $configuredPhpVersion = null;
+        try {
+            $this->ensureConfigurationExists();
+            $config = $this->loadConfiguration();
 
-        if (file_exists($codemapConfigFilePath)) {
-            $codemapConfiguration = require $codemapConfigFilePath;
-            if ($codemapConfiguration instanceof CodemapConfig) {
-                $configuredScanPaths = $codemapConfiguration->getScanPaths();
-                $configuredPhpVersion = $codemapConfiguration->getConfiguredPhpVersion();
-            }
-        } else {
-            $composerJsonPath = getcwd().'/composer.json';
-            $composerContents = file_get_contents($composerJsonPath) ?: '';
-            $composerData = json_decode($composerContents, true);
-            /* @phpstan-ignore-next-line */
-            $composerPhpVersionString = $composerData['require']['php'] ?? '^8.4.0';
-
-            $parsedComposerVersion = '8.4';
-            /* @phpstan-ignore-next-line */
-            if (preg_match('/(\d+\.\d+)/', (string) $composerPhpVersionString, $matches)) {
-                $parsedComposerVersion = $matches[1];
-            }
-
-            $mappedPhpVersion = PhpVersion::PHP_8_4;
-            foreach (PhpVersion::cases() as $phpVersionCase) {
-                if ($phpVersionCase->value === $parsedComposerVersion) {
-                    $mappedPhpVersion = $phpVersionCase;
-                    break;
-                }
-            }
-
-            $generatedDefaultConfig = $this->generateDefaultConfig($mappedPhpVersion);
-            try {
-                file_put_contents($codemapConfigFilePath, $generatedDefaultConfig);
-                $this->info('Created default codemap config at: '.$codemapConfigFilePath);
-            } catch (Exception $e) {
-                $this->error('Failed to create config file: '.$e->getMessage());
+            $scanPaths = $this->argument('paths') ? (array) $this->argument('paths') : $config->getScanPaths();
+            if ($scanPaths === []) {
+                $this->error('No scan paths provided or configured.');
 
                 return Command::FAILURE;
             }
-            $configuredScanPaths = [getcwd().'/src'];
-            $configuredPhpVersion = $mappedPhpVersion;
-        }
 
-        /* @var array<string> $paths */
-        $paths = (array) $this->argument('paths');
-        if ($paths === []) {
-            $paths = $configuredScanPaths;
-        }
+            $phpVersion = $this->getPhpVersion($config);
 
-        if ($paths === []) {
-            $this->error('No scan paths provided or configured.');
+            $codemapResults = $this->generateCodemap($scanPaths, $phpVersion);
+
+            $formatter = new TextCodemapFormatter;
+            $formattedOutput = $formatter->format($codemapResults);
+
+            $outputFile = $this->option('output');
+            $this->writeOutput($formattedOutput, $outputFile);
+
+            return Command::SUCCESS;
+        } catch (Exception $e) {
+            $this->error($e->getMessage());
 
             return Command::FAILURE;
         }
+    }
 
-        /* @phpstan-ignore-next-line */
-        $phpVersionString = (string) $this->option('php-version');
-        if ($phpVersionString !== '') {
-            $phpVersion = PhpVersion::tryFrom($phpVersionString);
-            if (! $phpVersion instanceof PhpVersion) {
-                $this->error('Invalid PHP version: '.$phpVersionString);
-
-                return Command::FAILURE;
-            }
-        } else {
-            $phpVersion = $configuredPhpVersion;
+    private function ensureConfigurationExists(): void
+    {
+        $codemapConfigFilePath = getcwd().'/codemap.php';
+        if (file_exists($codemapConfigFilePath)) {
+            return;
         }
 
-        $outputFile = $this->option('output');
+        $composerJsonPath = getcwd().'/composer.json';
+        if (! file_exists($composerJsonPath)) {
+            throw new RuntimeException('composer.json not found.');
+        }
 
+        $composerContents = file_get_contents($composerJsonPath);
+        if ($composerContents === false) {
+            throw new RuntimeException('Failed to read composer.json.');
+        }
+
+        $composerData = json_decode($composerContents, true);
+        if (! is_array($composerData)) {
+            throw new RuntimeException('Invalid composer.json.');
+        }
+        $composerPhpVersionString = $composerData['require']['php'] ?? '^8.4.0';
+
+        $parsedVersion = preg_match('/(\d+\.\d+)/', (string) $composerPhpVersionString, $matches) ? $matches[1] : '8.4';
+        $mappedPhpVersion = PhpVersion::PHP_8_4;
+        foreach (PhpVersion::cases() as $phpVersionCase) {
+            if ($phpVersionCase->value === $parsedVersion) {
+                $mappedPhpVersion = $phpVersionCase;
+                break;
+            }
+        }
+
+        $generatedConfig = $this->generateDefaultConfig($mappedPhpVersion);
+        if (! file_put_contents($codemapConfigFilePath, $generatedConfig)) {
+            throw new RuntimeException('Failed to write codemap.php.');
+        }
+
+        $this->info('Created default codemap config at: '.$codemapConfigFilePath);
+    }
+
+    private function loadConfiguration(): CodemapConfig
+    {
+        $codemapConfigFilePath = getcwd().'/codemap.php';
+        if (! file_exists($codemapConfigFilePath)) {
+            throw new RuntimeException('codemap.php not found.');
+        }
+        $codemapConfiguration = require $codemapConfigFilePath;
+        if (! $codemapConfiguration instanceof CodemapConfig) {
+            throw new RuntimeException('Invalid codemap configuration.');
+        }
+
+        return $codemapConfiguration;
+    }
+
+    private function getPhpVersion(CodemapConfig $config): ?PhpVersion
+    {
+        $phpVersionString = $this->option('php-version');
+        if ($phpVersionString) {
+            $phpVersion = PhpVersion::tryFrom($phpVersionString);
+            if (! $phpVersion instanceof PhpVersion) {
+                throw new InvalidArgumentException('Invalid PHP version: '.$phpVersionString);
+            }
+
+            return $phpVersion;
+        }
+
+        return $config->getConfiguredPhpVersion();
+    }
+
+    private function generateCodemap(array $scanPaths, ?PhpVersion $phpVersion): array
+    {
         $codemapGenerator = new CodemapGenerator;
         if ($phpVersion instanceof PhpVersion) {
-            $codemapGenerator->setPhpParserVersion(\PhpParser\PhpVersion::fromString($phpVersion->value));
+            $codemapGenerator->setPhpParserVersion($phpVersion->toParserPhpVersion());
         }
         $codemapGenerator->setErrorHandler(fn ($message) => $this->error($message));
 
         $aggregatedCodemapResults = [];
-        foreach ($paths as $scanPath) {
-            /* @phpstan-ignore-next-line */
+        foreach ($scanPaths as $scanPath) {
             if (! file_exists($scanPath)) {
                 $this->error('Warning: Path "'.$scanPath.'" does not exist.');
 
                 continue;
             }
             try {
-                /* @phpstan-ignore-next-line */
                 $fileResults = $codemapGenerator->generate($scanPath);
-                foreach ($fileResults as $fileName => $codemapDto) {
-                    $aggregatedCodemapResults[$fileName] = $codemapDto;
-                }
+                $aggregatedCodemapResults += $fileResults;
             } catch (Exception $e) {
                 $this->error('Error processing "'.$scanPath.'": '.$e->getMessage());
             }
         }
 
-        $formatter = new TextCodemapFormatter;
-        $formattedCodemapOutput = $formatter->format($aggregatedCodemapResults);
+        return $aggregatedCodemapResults;
+    }
 
+    /**
+     * @throws Exception
+     */
+    private function writeOutput(string $output, string $outputFile): void
+    {
         if ($outputFile === '-') {
-            $this->output->write($formattedCodemapOutput);
+            $this->output->write($output);
         } else {
             try {
-                /* @phpstan-ignore-next-line */
-                file_put_contents($outputFile, $formattedCodemapOutput);
+                file_put_contents($outputFile, $output);
                 $this->info('Codemap generated at: '.$outputFile);
             } catch (Exception $e) {
                 $this->error('Failed to write to "'.$outputFile.'": '.$e->getMessage());
-
-                return Command::FAILURE;
+                throw $e;
             }
         }
-
-        return Command::SUCCESS;
     }
 
     private function generateDefaultConfig(PhpVersion $mappedPhpVersion): string
