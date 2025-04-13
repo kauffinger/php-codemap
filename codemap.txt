@@ -34,6 +34,12 @@ File: Config/CodemapConfig.php
     public function withPhpVersion(Kauffinger\Codemap\Enum\PhpVersion $phpVersion): self
     public function getScanPaths(): array
     public function getConfiguredPhpVersion(): ?Kauffinger\Codemap\Enum\PhpVersion
+    public function withPropertyVisibility(array $levels): self
+    public function withMethodVisibility(array $levels): self
+    public function withExcludePaths(array $paths): self
+    public function getPropertyVisibilityLevels(): array
+    public function getMethodVisibilityLevels(): array
+    public function getExcludePaths(): array
 
 File: Enum/PhpVersion.php
   Enum: Kauffinger\Codemap\Enum\PhpVersion: string
@@ -70,6 +76,7 @@ File: Generator/CodemapGenerator.php
 
 File: Formatter/TextCodemapFormatter.php
   Class: Kauffinger\Codemap\Formatter\TextCodemapFormatter
+    public function __construct(array $propertyVisibilityLevels, array $methodVisibilityLevels): mixed
     public function format(array $codemapData): string
     private function formatMethod(Kauffinger\Codemap\Dto\CodemapMethodDto $methodInformation): string
     private function formatParameters(array $parameters): string
@@ -85,7 +92,7 @@ File: Console/CodemapCommand.php
     private function ensureConfigurationExists(): void
     private function loadConfiguration(): Kauffinger\Codemap\Config\CodemapConfig
     private function getPhpVersion(Kauffinger\Codemap\Config\CodemapConfig $config): ?Kauffinger\Codemap\Enum\PhpVersion
-    private function generateCodemap(array $scanPaths, ?Kauffinger\Codemap\Enum\PhpVersion $phpVersion): array
+    private function generateCodemap(array $scanPaths, ?Kauffinger\Codemap\Enum\PhpVersion $phpVersion, Kauffinger\Codemap\Config\CodemapConfig $config): array
     private function writeOutput(string $output, string $outputFile): void
     private function generateDefaultConfig(Kauffinger\Codemap\Enum\PhpVersion $mappedPhpVersion): string
     protected function info(string $message): void

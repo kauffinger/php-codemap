@@ -191,7 +191,7 @@ trait TraitX {}
 trait TraitY {}
 
 class ComplexClass extends BaseClass implements IfaceA, IfaceB {
-    use TraitX, TraitY;
+    use Test\Structure\TraitX, Test\Structure\TraitY;
 
     public function __construct() {}
 }
@@ -210,7 +210,6 @@ PHP);
 
     expect($classDto->extendsClass)->toBe('Test\\Structure\\BaseClass')
         ->and($classDto->implementsInterfaces)->toEqual(['Test\\Structure\\IfaceA', 'Test\\Structure\\IfaceB'])
-//        ->and($classDto->usesTraits)->toEqual(['Test\\Structure\\TraitX', 'Test\\Structure\\TraitY']) TODO: should be this, but lets go with the name
-        ->and($classDto->usesTraits)->toEqual(['TraitX', 'TraitY'])
+        ->and($classDto->usesTraits)->toEqual(['Test\\Structure\\TraitX', 'Test\\Structure\\TraitY']) // Expect FQCNs after NameResolver
         ->and($classDto->classMethods)->toHaveCount(1);
 });

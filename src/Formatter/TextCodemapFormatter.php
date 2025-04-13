@@ -9,10 +9,17 @@ use Kauffinger\Codemap\Dto\CodemapMethodDto;
 use Kauffinger\Codemap\Dto\CodemapParameterDto;
 use Kauffinger\Codemap\Dto\CodemapPropertyDto;
 
- // Added
+// Added
+// Added
 
-final class TextCodemapFormatter
+final readonly class TextCodemapFormatter
 {
+    /**
+     * @param  string[]  $allowedPropertyVisibilities
+     * @param  string[]  $allowedMethodVisibilities
+     */
+    public function __construct(private array $allowedPropertyVisibilities = ['public'], private array $allowedMethodVisibilities = ['public', 'protected', 'private']) {}
+
     /**
      * Formats the codemap data into a human-readable text representation.
      *
@@ -37,16 +44,17 @@ final class TextCodemapFormatter
                     $lines[] = '    Uses: '.implode(', ', $classInformation->usesTraits);
                 }
 
-                // Format Public Properties
+                // Format Properties based on allowed visibility
                 foreach ($classInformation->classProperties as $propertyInformation) {
-                    if ($propertyInformation->propertyVisibility === 'public') {
+                    if (in_array($propertyInformation->propertyVisibility, $this->allowedPropertyVisibilities, true)) {
                         $lines[] = $this->formatProperty($propertyInformation);
                     }
                 }
-                // Format Public Methods
+                // Format Methods based on allowed visibility
                 foreach ($classInformation->classMethods as $methodInformation) {
-                    // Show all visibilities for methods, unlike properties
-                    $lines[] = $this->formatMethod($methodInformation);
+                    if (in_array($methodInformation->methodVisibility, $this->allowedMethodVisibilities, true)) {
+                        $lines[] = $this->formatMethod($methodInformation);
+                    }
                 }
             }
 
@@ -62,16 +70,17 @@ final class TextCodemapFormatter
             // Format Traits
             foreach ($fileData->traitsInFile as $traitName => $traitDto) {
                 $lines[] = "  Trait: {$traitName}";
-                // Format Public Properties
+                // Format Trait Properties based on allowed visibility
                 foreach ($traitDto->traitProperties as $propertyInformation) {
-                    if ($propertyInformation->propertyVisibility === 'public') {
+                    if (in_array($propertyInformation->propertyVisibility, $this->allowedPropertyVisibilities, true)) {
                         $lines[] = $this->formatProperty($propertyInformation);
                     }
                 }
-                // Format Public Methods
+                // Format Trait Methods based on allowed visibility
                 foreach ($traitDto->traitMethods as $methodInformation) {
-                    // Show all visibilities for methods
-                    $lines[] = $this->formatMethod($methodInformation);
+                    if (in_array($methodInformation->methodVisibility, $this->allowedMethodVisibilities, true)) {
+                        $lines[] = $this->formatMethod($methodInformation);
+                    }
                 }
             }
 

@@ -182,8 +182,12 @@ final class SymbolCollectionVisitor extends NodeVisitorAbstract
         $methodParameters = [];
         foreach ($node->getParams() as $param) {
             $paramType = $this->renderTypeNode($param->type);
-            /* @phpstan-ignore-next-line */
-            $paramName = is_string($param->var->name) ? $param->var->name : 'unknown';
+            $paramName = 'unknown'; // Default value
+            // Ensure $param->var is a Variable node and its name property is a string
+            if ($param->var instanceof Node\Expr\Variable && is_string($param->var->name)) {
+                $paramName = $param->var->name;
+            }
+            // Optional: Add logging here if $paramName remains 'unknown' for debugging unexpected cases
             $methodParameters[] = new CodemapParameterDto($paramName, $paramType);
         }
 

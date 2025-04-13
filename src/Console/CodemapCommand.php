@@ -33,7 +33,8 @@ final class CodemapCommand extends Command
             ->setDescription('Generate a codemap of PHP code')
             ->addArgument('paths', InputArgument::IS_ARRAY | InputArgument::OPTIONAL, 'Paths to scan', [])
             ->addOption('output', 'o', InputOption::VALUE_REQUIRED, 'Output file path (use "-" for stdout)', 'codemap.txt')
-            ->addOption('php-version', null, InputOption::VALUE_REQUIRED, 'PHP version to use for parsing (e.g., "8.3")');
+            ->addOption('php-version', null, InputOption::VALUE_REQUIRED, 'PHP version to use for parsing (e.g., "8.3")')
+            ->addOption('visibility', null, InputOption::VALUE_REQUIRED, 'Comma-separated property visibility levels (e.g., "public,protected")');
     }
 
     #[Override]
@@ -61,9 +62,19 @@ final class CodemapCommand extends Command
             $phpVersion = $this->getPhpVersion($config);
 
             /* @phpstan-ignore-next-line */
-            $codemapResults = $this->generateCodemap($scanPaths, $phpVersion);
+            $codemapResults = $this->generateCodemap($scanPaths, $phpVersion, $config);
 
-            $formatter = new TextCodemapFormatter;
+            // Determine visibility levels
+            $propertyVisibilityLevels = $config->getPropertyVisibilityLevels();
+            $methodVisibilityLevels = $config->getMethodVisibilityLevels(); // Keep default for now
+
+            $visibilityOption = $this->option('visibility');
+            if (is_string($visibilityOption) && $visibilityOption !== '') {
+                $propertyVisibilityLevels = array_map('trim', explode(',', strtolower($visibilityOption)));
+                // TODO: Add validation for allowed values ('public', 'protected', 'private')
+            }
+
+            $formatter = new TextCodemapFormatter($propertyVisibilityLevels, $methodVisibilityLevels);
             $formattedOutput = $formatter->format($codemapResults);
 
             $outputFile = $this->option('output');
@@ -158,9 +169,10 @@ final class CodemapCommand extends Command
      * @param  string[]  $scanPaths
      * @return array<string, CodemapFileDto>
      */
-    private function generateCodemap(array $scanPaths, ?PhpVersion $phpVersion): array
+    private function generateCodemap(array $scanPaths, ?PhpVersion $phpVersion, CodemapConfig $config): array
     {
-        $codemapGenerator = new CodemapGenerator;
+        // Pass config to generator for exclusion paths
+        $codemapGenerator = new CodemapGenerator($config);
         if ($phpVersion instanceof PhpVersion) {
             $codemapGenerator->setPhpParserVersion($phpVersion->toParserPhpVersion());
         }

@@ -9,4 +9,8 @@ return CodemapConfig::configure()
     ->withScanPaths([
         __DIR__.'/src',
     ])
+    ->withExcludePaths([
+        'vendor', // Example: exclude vendor directory
+        // 'tests/Fixtures', // Example: exclude test fixtures
+    ])
     ->withPhpVersion(PhpVersion::PHP_8_3);

@@ -25,16 +25,18 @@ final class CodemapGenerator
      */
     private array $scanPaths = [];
 
-    private ?Closure $errorHandler = null;
+    private ?Closure $errorHandler = null; // Store the config
 
     /**
      * Initialize the generator with optional configuration.
      */
-    public function __construct(?CodemapConfig $config = null)
+    public function __construct(private readonly ?CodemapConfig $config = null)
     {
-        if ($config instanceof CodemapConfig) {
-            $this->phpParserVersion = $config->getConfiguredPhpVersion()?->toParserPhpVersion();
-            $this->scanPaths = $config->getScanPaths();
+        // Store the config instance
+        if ($this->config instanceof CodemapConfig) {
+            $this->phpParserVersion = $this->config->getConfiguredPhpVersion()?->toParserPhpVersion();
+            $this->scanPaths = $this->config->getScanPaths();
+            // Exclude paths are now accessible via $this->config->getExcludePaths()
         }
     }
 
@@ -147,6 +149,36 @@ final class CodemapGenerator
                 continue;
             }
             $filePath = $file->getRealPath();
+            if ($filePath === false) {
+                // Handle case where realpath fails, e.g., broken symlink
+                if ($this->errorHandler instanceof Closure) {
+                    ($this->errorHandler)('Warning: Could not resolve real path for "'.$file->getPathname().'". Skipping.');
+                }
+
+                continue;
+            }
+
+            // Check against exclusion paths/patterns from config
+            $excludePaths = $this->config?->getExcludePaths() ?? [];
+            $isExcluded = false;
+            foreach ($excludePaths as $excludePattern) {
+                // Simple directory prefix check (relative to project root assuming scans start there)
+                // Or handle absolute paths based on config context. Let's assume relative for now.
+                $normalizedExclude = rtrim(str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $excludePattern), DIRECTORY_SEPARATOR);
+                $absoluteExcludePath = realpath($basePath.DIRECTORY_SEPARATOR.$normalizedExclude); // Check if exclude is relative to base
+
+                if ($absoluteExcludePath !== false && str_starts_with($filePath, $absoluteExcludePath.DIRECTORY_SEPARATOR)) {
+                    $isExcluded = true;
+                    break;
+                }
+                // TODO: Add fnmatch() support for glob patterns if needed
+                // if (fnmatch($excludePattern, $filePath)) { $isExcluded = true; break; }
+            }
+
+            if ($isExcluded) {
+                continue; // Skip excluded file
+            }
+
             $relativePath = str_replace($basePath.DIRECTORY_SEPARATOR, '', $filePath);
             try {
                 $codemapFileDto = $this->processSingleFile($filePath);
