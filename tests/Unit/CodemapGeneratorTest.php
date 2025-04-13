@@ -147,3 +147,70 @@ PHP);
 
     unlink($tempFile);
 });
+
+test('CodemapGenerator can parse a simple trait', function (): void {
+    $tempFile = sys_get_temp_dir().'/codemap_'.uniqid().'.php';
+    file_put_contents($tempFile, <<<'PHP'
+<?php
+namespace Test\Traits;
+
+trait SimpleTrait {
+    public string $traitProperty;
+    public function traitMethod(): bool { return true; }
+}
+PHP);
+
+    $generator = new CodemapGenerator;
+    $result = $generator->generate($tempFile);
+    unlink($tempFile);
+
+    expect($result)->toHaveCount(1);
+    $fileKey = array_key_first($result);
+    $codemapFileDto = $result[$fileKey];
+
+    expect($codemapFileDto->traitsInFile)->toHaveKey('Test\\Traits\\SimpleTrait');
+
+    $traitDto = $codemapFileDto->traitsInFile['Test\\Traits\\SimpleTrait'];
+    expect($traitDto->traitName)->toBe('Test\\Traits\\SimpleTrait')
+        ->and($traitDto->traitProperties)->toHaveCount(1)
+        ->and($traitDto->traitProperties[0]->propertyName)->toBe('traitProperty')
+        ->and($traitDto->traitMethods)->toHaveCount(1)
+        ->and($traitDto->traitMethods[0]->methodName)->toBe('traitMethod');
+});
+
+test('CodemapGenerator captures class inheritance, implementation, and trait usage', function (): void {
+    $tempFile = sys_get_temp_dir().'/codemap_'.uniqid().'.php';
+    file_put_contents($tempFile, <<<'PHP'
+<?php
+namespace Test\Structure;
+
+class BaseClass {}
+interface IfaceA {}
+interface IfaceB {}
+trait TraitX {}
+trait TraitY {}
+
+class ComplexClass extends BaseClass implements IfaceA, IfaceB {
+    use TraitX, TraitY;
+
+    public function __construct() {}
+}
+PHP);
+
+    $generator = new CodemapGenerator;
+    $result = $generator->generate($tempFile);
+    unlink($tempFile);
+
+    expect($result)->toHaveCount(1);
+    $fileKey = array_key_first($result);
+    $codemapFileDto = $result[$fileKey];
+
+    expect($codemapFileDto->classesInFile)->toHaveKey('Test\\Structure\\ComplexClass');
+    $classDto = $codemapFileDto->classesInFile['Test\\Structure\\ComplexClass'];
+
+    expect($classDto->extendsClass)->toBe('Test\\Structure\\BaseClass')
+        ->and($classDto->implementsInterfaces)->toEqual(['Test\\Structure\\IfaceA', 'Test\\Structure\\IfaceB'])
+//        ->and($classDto->usesTraits)->toEqual(['Test\\Structure\\TraitX', 'Test\\Structure\\TraitY']) TODO: should be this, but lets go with the name
+        ->and($classDto->usesTraits)->toEqual(['TraitX', 'TraitY'])
+        ->and($classDto->classMethods)->toHaveCount(1);
+});

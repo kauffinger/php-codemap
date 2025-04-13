@@ -1,6 +1,10 @@
+File: Dto/CodemapTraitDto.php
+  Class: Kauffinger\Codemap\Dto\CodemapTraitDto
+    public function __construct(string $traitName, array $traitMethods, array $traitProperties): mixed
+
 File: Dto/CodemapClassDto.php
   Class: Kauffinger\Codemap\Dto\CodemapClassDto
-    public function __construct(array $classMethods, array $classProperties): mixed
+    public function __construct(array $classMethods, array $classProperties, array $usesTraits, ?string $extendsClass, array $implementsInterfaces): mixed
 
 File: Dto/CodemapPropertyDto.php
   Class: Kauffinger\Codemap\Dto\CodemapPropertyDto
@@ -12,7 +16,7 @@ File: Dto/CodemapMethodDto.php
 
 File: Dto/CodemapFileDto.php
   Class: Kauffinger\Codemap\Dto\CodemapFileDto
-    public function __construct(array $classesInFile, array $enumsInFile): mixed
+    public function __construct(array $classesInFile, array $enumsInFile, array $traitsInFile): mixed
 
 File: Dto/CodemapParameterDto.php
   Class: Kauffinger\Codemap\Dto\CodemapParameterDto
@@ -41,6 +45,10 @@ File: Enum/PhpVersion.php
 
 File: Generator/SymbolCollectionVisitor.php
   Class: Kauffinger\Codemap\Generator\SymbolCollectionVisitor
+    Extends: PhpParser\NodeVisitorAbstract
+    public property array $collectedClasses
+    public property array $collectedEnums
+    public property array $collectedTraits
     public function enterNode(PhpParser\Node $node): null|int|PhpParser\Node|array
     public function leaveNode(PhpParser\Node $node): null|int|PhpParser\Node|array
     private function renderTypeNode(?PhpParser\Node $typeNode): string
@@ -49,8 +57,6 @@ File: Generator/SymbolCollectionVisitor.php
     private function handleProperty(PhpParser\Node\Stmt\Property $node): void
     private function handleEnumCase(PhpParser\Node\Stmt\EnumCase $node): void
     private function renderEnumCaseValue(PhpParser\Node $expr): ?string
-    public property array $collectedClasses
-    public property array $collectedEnums
 
 File: Generator/CodemapGenerator.php
   Class: Kauffinger\Codemap\Generator\CodemapGenerator
@@ -72,9 +78,15 @@ File: Formatter/TextCodemapFormatter.php
 
 File: Console/CodemapCommand.php
   Class: Kauffinger\Codemap\Console\CodemapCommand
+    Extends: Symfony\Component\Console\Command\Command
     protected function configure(): void
     protected function execute(Symfony\Component\Console\Input\InputInterface $input, Symfony\Component\Console\Output\OutputInterface $output): int
     protected function handle(): int
+    private function ensureConfigurationExists(): void
+    private function loadConfiguration(): Kauffinger\Codemap\Config\CodemapConfig
+    private function getPhpVersion(Kauffinger\Codemap\Config\CodemapConfig $config): ?Kauffinger\Codemap\Enum\PhpVersion
+    private function generateCodemap(array $scanPaths, ?Kauffinger\Codemap\Enum\PhpVersion $phpVersion): array
+    private function writeOutput(string $output, string $outputFile): void
     private function generateDefaultConfig(Kauffinger\Codemap\Enum\PhpVersion $mappedPhpVersion): string
     protected function info(string $message): void
     protected function error(string $message): void

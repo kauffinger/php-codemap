@@ -196,6 +196,10 @@ final class CodemapGenerator
         $nodeTraverser->addVisitor($symbolCollectionVisitor);
         $nodeTraverser->traverse((array) $abstractSyntaxTree);
 
-        return new CodemapFileDto($symbolCollectionVisitor->collectedClasses, $symbolCollectionVisitor->collectedEnums);
+        return new CodemapFileDto(
+            $symbolCollectionVisitor->collectedClasses,
+            $symbolCollectionVisitor->collectedEnums,
+            $symbolCollectionVisitor->collectedTraits // <-- Add this parameter
+        );
     }
 }

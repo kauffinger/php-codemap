@@ -9,6 +9,7 @@ use Kauffinger\Codemap\Dto\CodemapEnumDto;
 use Kauffinger\Codemap\Dto\CodemapMethodDto;
 use Kauffinger\Codemap\Dto\CodemapParameterDto;
 use Kauffinger\Codemap\Dto\CodemapPropertyDto;
+use Kauffinger\Codemap\Dto\CodemapTraitDto;
 use Override;
 use PhpParser\Node;
 use PhpParser\Node\ComplexType;
@@ -17,10 +18,11 @@ use PhpParser\Node\Stmt\ClassMethod;
 use PhpParser\Node\Stmt\Enum_;
 use PhpParser\Node\Stmt\EnumCase;
 use PhpParser\Node\Stmt\Property;
+use PhpParser\Node\Stmt\Trait_;
 use PhpParser\NodeVisitorAbstract;
 
 /**
- * A node visitor that collects both classes and enums into DTOs.
+ * A node visitor that collects classes, enums, and traits into DTOs.
  */
 final class SymbolCollectionVisitor extends NodeVisitorAbstract
 {
@@ -34,9 +36,16 @@ final class SymbolCollectionVisitor extends NodeVisitorAbstract
      */
     public array $collectedEnums = [];
 
+    /**
+     * @var array<string, CodemapTraitDto>
+     */
+    public array $collectedTraits = [];
+
     private ?string $currentClassName = null;
 
     private ?string $currentEnumName = null;
+
+    private ?string $currentTraitName = null;
 
     #[Override]
     public function enterNode(Node $node): null|int|Node|array
@@ -47,7 +56,24 @@ final class SymbolCollectionVisitor extends NodeVisitorAbstract
                 ? $node->namespacedName->toString()
                 : (string) $node->name;
 
-            $this->collectedClasses[$this->currentClassName] = new CodemapClassDto;
+            // Extract inheritance, implementation, and trait usage
+            $extends = $node->extends ? $node->extends->toString() : null;
+            $implements = array_map(fn (Node\Name $name) => $name->toString(), $node->implements);
+            $uses = [];
+            foreach ($node->getTraitUses() as $traitUse) {
+                foreach ($traitUse->traits as $traitName) {
+                    $uses[] = $traitName->toString();
+                }
+            }
+
+            // Initialize DTO with structural info; methods/props added later
+            $this->collectedClasses[$this->currentClassName] = new CodemapClassDto(
+                [], // Methods added later
+                [], // Properties added later
+                $uses,
+                $extends,
+                $implements
+            );
         }
         // Handle enum
         elseif ($node instanceof Enum_) {
@@ -66,6 +92,14 @@ final class SymbolCollectionVisitor extends NodeVisitorAbstract
                 $backingType
             );
         }
+        // Handle trait
+        elseif ($node instanceof Trait_) {
+            $this->currentTraitName = $node->namespacedName
+                ? $node->namespacedName->toString()
+                : (string) $node->name; // Fallback, though namespacedName should exist after NameResolver
+
+            $this->collectedTraits[$this->currentTraitName] = new CodemapTraitDto($this->currentTraitName);
+        }
 
         return null;
     }
@@ -81,8 +115,12 @@ final class SymbolCollectionVisitor extends NodeVisitorAbstract
         elseif ($node instanceof Enum_ && $this->currentEnumName !== null) {
             $this->currentEnumName = null;
         }
-        // Inside a class
-        elseif ($this->currentClassName !== null) {
+        // End of a trait
+        elseif ($node instanceof Trait_ && $this->currentTraitName !== null) {
+            $this->currentTraitName = null;
+        }
+        // Inside a class or trait
+        elseif ($this->currentClassName !== null || $this->currentTraitName !== null) {
             if ($node instanceof ClassMethod) {
                 $this->handleClassMethod($node);
             } elseif ($node instanceof Property) {
@@ -130,7 +168,7 @@ final class SymbolCollectionVisitor extends NodeVisitorAbstract
     }
 
     /**
-     * Processes a ClassMethod node, building and adding its DTO to the current class.
+     * Processes a ClassMethod node, building and adding its DTO to the current class or trait.
      */
     private function handleClassMethod(ClassMethod $node): void
     {
@@ -156,16 +194,29 @@ final class SymbolCollectionVisitor extends NodeVisitorAbstract
             $methodParameters
         );
 
-        $oldClassDto = $this->collectedClasses[$this->currentClassName];
-        $updatedMethods = [...$oldClassDto->classMethods, $newMethod];
-        $this->collectedClasses[$this->currentClassName] = new CodemapClassDto(
-            $updatedMethods,
-            $oldClassDto->classProperties
-        );
+        if ($this->currentClassName !== null) {
+            $oldClassDto = $this->collectedClasses[$this->currentClassName];
+            $updatedMethods = [...$oldClassDto->classMethods, $newMethod];
+            $this->collectedClasses[$this->currentClassName] = new CodemapClassDto(
+                $updatedMethods,
+                $oldClassDto->classProperties,
+                $oldClassDto->usesTraits,
+                $oldClassDto->extendsClass,
+                $oldClassDto->implementsInterfaces
+            );
+        } elseif ($this->currentTraitName !== null) {
+            $oldTraitDto = $this->collectedTraits[$this->currentTraitName];
+            $updatedMethods = [...$oldTraitDto->traitMethods, $newMethod];
+            $this->collectedTraits[$this->currentTraitName] = new CodemapTraitDto(
+                $oldTraitDto->traitName,
+                $updatedMethods,
+                $oldTraitDto->traitProperties
+            );
+        }
     }
 
     /**
-     * Processes a Property node, building and adding its DTO(s) to the current class.
+     * Processes a Property node, building and adding its DTO(s) to the current class or trait.
      */
     private function handleProperty(Property $node): void
     {
@@ -182,12 +233,25 @@ final class SymbolCollectionVisitor extends NodeVisitorAbstract
                 $determinedPropertyType
             );
 
-            $oldClassDto = $this->collectedClasses[$this->currentClassName];
-            $updatedProperties = [...$oldClassDto->classProperties, $newProperty];
-            $this->collectedClasses[$this->currentClassName] = new CodemapClassDto(
-                $oldClassDto->classMethods,
-                $updatedProperties
-            );
+            if ($this->currentClassName !== null) {
+                $oldClassDto = $this->collectedClasses[$this->currentClassName];
+                $updatedProperties = [...$oldClassDto->classProperties, $newProperty];
+                $this->collectedClasses[$this->currentClassName] = new CodemapClassDto(
+                    $oldClassDto->classMethods,
+                    $updatedProperties,
+                    $oldClassDto->usesTraits,
+                    $oldClassDto->extendsClass,
+                    $oldClassDto->implementsInterfaces
+                );
+            } elseif ($this->currentTraitName !== null) {
+                $oldTraitDto = $this->collectedTraits[$this->currentTraitName];
+                $updatedProperties = [...$oldTraitDto->traitProperties, $newProperty];
+                $this->collectedTraits[$this->currentTraitName] = new CodemapTraitDto(
+                    $oldTraitDto->traitName,
+                    $oldTraitDto->traitMethods,
+                    $updatedProperties
+                );
+            }
         }
     }
 

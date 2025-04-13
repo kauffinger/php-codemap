@@ -9,6 +9,8 @@ use Kauffinger\Codemap\Dto\CodemapMethodDto;
 use Kauffinger\Codemap\Dto\CodemapParameterDto;
 use Kauffinger\Codemap\Dto\CodemapPropertyDto;
 
+ // Added
+
 final class TextCodemapFormatter
 {
     /**
@@ -21,18 +23,34 @@ final class TextCodemapFormatter
         $lines = [];
         foreach ($codemapData as $fileName => $fileData) {
             $lines[] = "File: {$fileName}";
+
+            // Format Classes
             foreach ($fileData->classesInFile as $className => $classInformation) {
                 $lines[] = "  Class: {$className}";
-                foreach ($classInformation->classMethods as $methodInformation) {
-                    $lines[] = $this->formatMethod($methodInformation);
+                if ($classInformation->extendsClass) {
+                    $lines[] = "    Extends: {$classInformation->extendsClass}";
                 }
+                if ($classInformation->implementsInterfaces !== []) {
+                    $lines[] = '    Implements: '.implode(', ', $classInformation->implementsInterfaces);
+                }
+                if ($classInformation->usesTraits !== []) {
+                    $lines[] = '    Uses: '.implode(', ', $classInformation->usesTraits);
+                }
+
+                // Format Public Properties
                 foreach ($classInformation->classProperties as $propertyInformation) {
                     if ($propertyInformation->propertyVisibility === 'public') {
                         $lines[] = $this->formatProperty($propertyInformation);
                     }
                 }
+                // Format Public Methods
+                foreach ($classInformation->classMethods as $methodInformation) {
+                    // Show all visibilities for methods, unlike properties
+                    $lines[] = $this->formatMethod($methodInformation);
+                }
             }
 
+            // Format Enums
             foreach ($fileData->enumsInFile as $enumName => $enumDto) {
                 $backingInfo = $enumDto->backingType ? ": {$enumDto->backingType}" : '';
                 $lines[] = "  Enum: {$enumName}{$backingInfo}";
@@ -41,7 +59,28 @@ final class TextCodemapFormatter
                 }
             }
 
-            $lines[] = '';
+            // Format Traits
+            foreach ($fileData->traitsInFile as $traitName => $traitDto) {
+                $lines[] = "  Trait: {$traitName}";
+                // Format Public Properties
+                foreach ($traitDto->traitProperties as $propertyInformation) {
+                    if ($propertyInformation->propertyVisibility === 'public') {
+                        $lines[] = $this->formatProperty($propertyInformation);
+                    }
+                }
+                // Format Public Methods
+                foreach ($traitDto->traitMethods as $methodInformation) {
+                    // Show all visibilities for methods
+                    $lines[] = $this->formatMethod($methodInformation);
+                }
+            }
+
+            $lines[] = ''; // Add a blank line after each file's details
+        }
+
+        // Remove trailing blank line if present
+        if (end($lines) === '') {
+            array_pop($lines);
         }
 
         return implode("\n", $lines);
@@ -74,7 +113,7 @@ final class TextCodemapFormatter
     }
 
     /**
-     * Formats a property's details into a string, for public properties only.
+     * Formats a property's details into a string.
      */
     private function formatProperty(CodemapPropertyDto $propertyInformation): string
     {
@@ -86,6 +125,9 @@ final class TextCodemapFormatter
         );
     }
 
+    /**
+     * Formats an enum case's details into a string.
+     */
     private function formatEnumCase(?string $caseValue, int|string $caseName): string
     {
         return $caseValue === null ? "    case {$caseName}" : "    case {$caseName} = {$caseValue}";
